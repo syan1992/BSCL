@@ -75,15 +75,16 @@ class SupConLoss(nn.Module):
         logits = anchor_dot_contrast - logits_max.detach()
 
         weight = torch.sqrt((torch.pow(labels.repeat(1,batch_size)-labels.repeat(1,batch_size).T,2)))
-        threshold = self.threshold
-        mask = torch.where(weight<=threshold,1,0)
+        dynamic_t = torch.quantile(weight,0.5,dim=1)
+        dynamic_t = torch.where(dynamic_t>self.threshold,self.threshold,dynamic_t.double())
+        mask = torch.le(weight,dynamic_t.repeat([128,1]).T).int()
 
         gamma1 = self.gamma1 
         gamma2 = self.gamma2
         
-        n_weight = -weight/threshold
+        n_weight = -weight/dynamic_t
         n_weight = 1+torch.exp(n_weight*gamma1)
-        d_weight = ((weight-threshold).T/(torch.max(weight,dim=1)[0]-threshold)).T+gamma2
+        d_weight = ((weight-dynamic_t.repeat([128,1]).T).T/(torch.max(weight,dim=1)[0]-dynamic_t)).T+gamma2
         d_weight = torch.exp(d_weight)
 
         logits_mask = torch.scatter(
@@ -130,12 +131,11 @@ class SupConLoss(nn.Module):
         logits = anchor_dot_contrast - logits_max.detach()
 
         weight = torch.sqrt((torch.pow(labels.repeat(1,batch_size)-labels.repeat(1,batch_size).T,2)))
+        mask = torch.le(weight,dynamic_t.repeat([128,1]).T).int()
 
-        mask = torch.where(weight<=threshold,1,0)
-
-        n_weight = -weight/threshold
+        n_weight = -weight/dynamic_t
         n_weight = 1+torch.exp(n_weight*gamma1)
-        d_weight = ((weight-threshold).T/(torch.max(weight,dim=1)[0]-threshold)).T+gamma2
+        d_weight = ((weight-dynamic_t.repeat([128,1]).T).T/(torch.max(weight,dim=1)[0]-dynamic_t)).T+gamma2
         d_weight = torch.exp(d_weight)
 
         mask = mask.repeat(anchor_count, contrast_count)
