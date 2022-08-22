@@ -1,4 +1,4 @@
-# Bimodal Supervised Contrastive Learning
+# Molecular Property Prediction based on Bimodal Supervised Contrastive Learning
 
 ## Recommended Requirements
 python==3.8
