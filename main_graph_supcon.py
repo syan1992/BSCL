@@ -29,7 +29,6 @@ import numpy as np
 from torch_geometric.utils.convert import to_networkx
 import matplotlib.pyplot as plt
 from evaluate import Evaluator
-from torch.utils.data.sampler import WeightedRandomSampler
 import torch.nn.functional as F
 import copy
 try:
