@@ -76,7 +76,7 @@ def parse_option():
                         help='temperature for loss function')
     parser.add_argument('--gamma1', type=float, default=2)
     parser.add_argument('--gamma2', type=float, default=2)
-    parser.add_argument('--threshold', type=float, default=0.5)
+    parser.add_argument('--threshold', type=float, default=0.8)
     parser.add_argument('--mlp_layers',type=int,default=2)
     parser.add_argument('--num_gc_layers',type=int,default=3)
     # other setting
@@ -99,8 +99,8 @@ def parse_option():
     for it in iterations:
         opt.lr_decay_epochs.append(int(it))
 
-    opt.model_name = 'SupCon_{}_{}_lr1_{}_decay_{}_bsz_{}_temp_{}_trial_{}_gamma1_{}_gamma2_{}_threshold_{}_mlp_{}_decay_{}_rate_{}'.\
-        format(opt.dataset, opt.model, opt.learning_rate,opt.weight_decay, opt.batch_size, opt.temp, opt.trial,opt.gamma1,opt.gamma2,opt.threshold,opt.mlp_layers,opt.lr_decay_epochs,opt.lr_decay_rate)
+    opt.model_name = 'SupCon_{}_{}_lr1_{}_decay_{}_bsz_{}_temp_{}_trial_{}_gamma1_{}_gamma2_{}_mlp_{}_decay_{}_rate_{}'.\
+        format(opt.dataset, opt.model, opt.learning_rate,opt.weight_decay, opt.batch_size, opt.temp, opt.trial,opt.gamma1,opt.gamma2,opt.mlp_layers,opt.lr_decay_epochs,opt.lr_decay_rate)
 
     if opt.cosine:
         opt.model_name = '{}_cosine'.format(opt.model_name)
@@ -128,8 +128,7 @@ else:
 
 def set_loader(opt, dn):
 
-    rr = opt.data_folder   #"/home/yan/code/Drug Property/dataset_handcrafted_moleculeX"
-    pdb.set_trace()
+    rr = opt.data_folder   
     train_dataset = PygOurDataset(root=rr,phase='train',dataname=dn)
     test_dataset = PygOurDataset(root=rr,phase='test',dataname=dn)
     val_dataset = PygOurDataset(root=rr,phase='valid',dataname=dn)
@@ -229,7 +228,7 @@ class Classifier(torch.nn.Sequential):
             o = self.fusion(h)
 
         if phase=='train':
-            return f1_cross, f2_cross, f1_recon, f2_recon, o, f1_sp, f2_sp, f1_co, f2_co, f1_raw, f2_raw#, out1, out2#, out3
+            return f1_cross, f2_cross, f1_recon, f2_recon, o, f1_sp, f2_sp, f1_co, f2_co, f1_raw, f2_raw
         else:
             return o, f1_sp, f2_sp, f1_cross, f2_cross, h
 def set_model(opt):
@@ -294,34 +293,33 @@ def train(train_dataset, model, criterion_scl, criterion_mse, criterion_task, op
         f1_cross, f2_cross, f1_recon, f2_recon, o, f1_sp, f2_sp, f1_co, f2_co, f1_raw, f2_raw = model(batch, opt)
         features_cross = torch.cat([f1_cross.unsqueeze(1), f2_cross.unsqueeze(1)], dim=1)
 
-        if len(labels.shape)>1 and labels.shape[1]>1:
-            loss_task_tmp = 0
-            loss_scl_tmp = 0
-            loss_recon_tmp = 0
-            total_num = labels.shape[1]
-            for i in range(labels.shape[1]):
-                is_labeled = batch.y[:,i]==batch.y[:,i]
-                if batch.y[is_labeled,i].unique().shape[0]<2:
-                    total_num = total_num-1
-                    continue
+        
+        loss_task_tmp = 0
+        loss_scl_tmp = 0
+        loss_recon_tmp = 0
+        total_num = labels.shape[1]
+        for i in range(labels.shape[1]):
+            is_labeled = batch.y[:,i]==batch.y[:,i]
+            
+            loss_task = criterion_task(o[is_labeled,i].squeeze(),labels[is_labeled,i].squeeze())
+            loss_recon = (criterion_mse(f1_recon[is_labeled],f1_raw[is_labeled])+criterion_mse(f2_recon[is_labeled],f2_raw[is_labeled]))/2.0
+            loss_scl = criterion_scl(features_cross[is_labeled], labels[is_labeled,i])
 
-                loss_task = criterion_task(o[is_labeled,i].squeeze(),labels[is_labeled,i].squeeze())
-                loss_recon = (criterion_mse(f1_recon[is_labeled],f1_raw[is_labeled])+criterion_mse(f2_recon[is_labeled],f2_raw[is_labeled]))/2.0
-                loss_scl = criterion_scl(features_cross[is_labeled], labels[is_labeled,i])
+            loss_task_tmp = loss_task_tmp+loss_task
+            loss_recon_tmp = loss_recon_tmp+loss_recon
 
-                loss_task_tmp = loss_task_tmp+loss_task
+            if opt.classification:
+                wk = torch.sum(labels[is_labeled,i],dim=0)/labels.shape[0]
+                wk = (1-wk)*(1-wk)    
+                loss_scl_tmp = loss_scl_tmp+wk*loss_scl
+            else:
                 loss_scl_tmp = loss_scl_tmp+loss_scl
-                loss_recon_tmp = loss_recon_tmp+loss_recon
+            
 
-            loss_task = loss_task_tmp/total_num
-            loss_scl = loss_scl_tmp/total_num
-            loss_recon = loss_recon_tmp/total_num
-            loss = opt.wscl*loss_scl+opt.wrecon*loss_recon+loss_task
-        else:
-            loss_task = criterion_task(o.squeeze(),labels.squeeze())
-            loss_recon = (criterion_mse(f1_recon,f1_raw)+criterion_mse(f2_recon,f2_raw))/2.0
-            loss_scl = criterion_scl(features_cross, labels)
-            loss = loss_task+opt.wscl*loss_scl+opt.wrecon*loss_recon
+        loss_task = loss_task_tmp/total_num
+        loss_scl = loss_scl_tmp/total_num
+        loss_recon = loss_recon_tmp/total_num
+        loss = opt.wscl*loss_scl+opt.wrecon*loss_recon+loss_task
 
 
         # update metric
