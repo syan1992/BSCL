@@ -22,12 +22,14 @@ transformers==4.12.2
 We run the code on GPU and the version of CUDA is 11.6
 
 ## Datasets
-
+Please find the 'datasets' folder for the example of the data. The data should be split into train/validation/test subsets at first. 
 
 ## Usage example
-1. Uncomment the command line corresponding to the dataset you want to test in the shell script 'autorun.sh'
+We list all command lines in the shell script 'autorun.sh' for the seven datasets we test in our experiments. 
+1. Uncomment the command line corresponding to the dataset you want to test in 'autorun.sh'
 2. Run 'autorun.sh'.
 ```sh
 ./autorun.sh
 ```
-It will train the model and predict on the test set. 
+We save the model with the best performance on the validation set and evaluate the best model with the test set.
+Both model and test results will be saved in the 'save' folder.
