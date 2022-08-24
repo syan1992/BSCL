@@ -33,3 +33,7 @@ We list all command lines in the shell script 'autorun.sh' for the seven dataset
 ```
 We save the model with the best performance on the validation set and evaluate the best model with the test set.
 Both model and test results will be saved in the 'save' folder.
+
+## Acknowledge
+Supervised contrastive learning : https://github.com/HobbitLong/SupContrast  
+Deepgcn : https://github.com/lightaime/deep_gcns_torch
