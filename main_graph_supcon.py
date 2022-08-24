@@ -12,15 +12,12 @@ import torch
 import torch.backends.cudnn as cudnn
 from torchvision import transforms, datasets
 
-from util import TwoCropTransform, AverageMeter
-from util import adjust_learning_rate, warmup_learning_rate
-from util import set_optimizer, save_model
-
-from load_our_dataset import PygOurDataset
+from utils.util import AverageMeter, adjust_learning_rate, warmup_learning_rate, set_optimizer, save_model
+from utils.load_our_dataset import PygOurDataset
 from torch_geometric.data import DataLoader
 from copy import deepcopy
-from deepgcn import DeeperGCN,SupConDeeperGCN
-from SMILESBert import SMILESBert
+from models.deepgcn import DeeperGCN,SupConDeeperGCN
+from models.SMILESBert import SMILESBert
 from tqdm import tqdm
 
 
@@ -28,7 +25,7 @@ import numpy as np
 
 from torch_geometric.utils.convert import to_networkx
 import matplotlib.pyplot as plt
-from evaluate import Evaluator
+from utils.evaluate import Evaluator
 import torch.nn.functional as F
 import copy
 try:
@@ -122,9 +119,9 @@ def parse_option():
 
 opt = parse_option()
 if opt.classification:
-        from loss_scl_cls import SupConLoss
+        from loss.loss_scl_cls import SupConLoss
 else:
-        from loss_scl_reg import SupConLoss
+        from loss.loss_scl_reg import SupConLoss
 
 def set_loader(opt, dn):
 
@@ -132,6 +129,7 @@ def set_loader(opt, dn):
     train_dataset = PygOurDataset(root=rr,phase='train',dataname=dn)
     test_dataset = PygOurDataset(root=rr,phase='test',dataname=dn)
     val_dataset = PygOurDataset(root=rr,phase='valid',dataname=dn)
+
     return train_dataset, test_dataset, val_dataset
 
 
@@ -167,16 +165,16 @@ class Classifier(torch.nn.Sequential):
                 torch.nn.Linear(dim_feat, dim_feat)
                 )
 
-        self.head = torch.nn.Sequential(                    
-                torch.nn.Linear(dim_feat, 128),
+        self.head_1 = torch.nn.Sequential(                    
+                torch.nn.Linear(dim_feat, dim_feat),
                 torch.nn.ReLU(inplace=True),      
-                torch.nn.Linear(128,128)
+                torch.nn.Linear(dim_feat, dim_feat)
                 )
         
-        self.head_1 = torch.nn.Sequential(
-                torch.nn.Linear(dim_feat, 128),
+        self.head_2 = torch.nn.Sequential(
+                torch.nn.Linear(dim_feat, dim_feat),
                 torch.nn.ReLU(inplace=True),
-                torch.nn.Linear(128,128)
+                torch.nn.Linear(dim_feat, dim_feat)
                 )
         self.recon_1 = torch.nn.Linear(dim_feat, dim_feat)
         self.recon_2 = torch.nn.Linear(dim_feat, dim_feat)
@@ -197,9 +195,9 @@ class Classifier(torch.nn.Sequential):
         self.fusion_global.add_module('fusion_layer_3', torch.nn.Linear(in_features=dim_feat*2, out_features=opt.num_tasks))
 
     def forward(self, batch1, opt, phase='train'):
-        if opt.classification:
+        if opt.classification and opt.global_feature:
             global_feature=torch.cat((batch1.mgf.view(batch1.y.shape[0],-1),batch1.maccs.view(batch1.y.shape[0],-1)),dim=1).float()
-        else:
+        elif not opt.classification and opt.global_feature:
             global_feature = F.normalize(torch.cat((batch1.mgf.view(batch1.y.shape[0],-1),batch1.maccs.view(batch1.y.shape[0],-1)),dim=1).float(),dim=1)
 
         f1_raw = self.model_1(batch1)
@@ -210,8 +208,8 @@ class Classifier(torch.nn.Sequential):
         f1_co = self.enc1_2(f1_raw)
         f2_co = self.enc1_2(f2_raw)
 
-        f1_cross = F.normalize(self.head(f1_co),dim=1)
-        f2_cross = F.normalize(self.head_1(f2_co),dim=1)
+        f1_cross = F.normalize(self.head_1(f1_co),dim=1)
+        f2_cross = F.normalize(self.head_2(f2_co),dim=1)
 
         f1_recon = self.recon_1(f1_sp+f1_co)
         f2_recon = self.recon_2(f2_sp+f2_co)
@@ -293,32 +291,34 @@ def train(train_dataset, model, criterion_scl, criterion_mse, criterion_task, op
         f1_cross, f2_cross, f1_recon, f2_recon, o, f1_sp, f2_sp, f1_co, f2_co, f1_raw, f2_raw = model(batch, opt)
         features_cross = torch.cat([f1_cross.unsqueeze(1), f2_cross.unsqueeze(1)], dim=1)
 
-        
         loss_task_tmp = 0
         loss_scl_tmp = 0
         loss_recon_tmp = 0
-        total_num = labels.shape[1]
+        total_num = 0
+
+        loss_recon = (criterion_mse(f1_recon,f1_raw)+criterion_mse(f2_recon,f2_raw))/2.0
         for i in range(labels.shape[1]):
             is_labeled = batch.y[:,i]==batch.y[:,i]
-            
             loss_task = criterion_task(o[is_labeled,i].squeeze(),labels[is_labeled,i].squeeze())
-            loss_recon = (criterion_mse(f1_recon[is_labeled],f1_raw[is_labeled])+criterion_mse(f2_recon[is_labeled],f2_raw[is_labeled]))/2.0
             loss_scl = criterion_scl(features_cross[is_labeled], labels[is_labeled,i])
-
+            
             loss_task_tmp = loss_task_tmp+loss_task
-            loss_recon_tmp = loss_recon_tmp+loss_recon
 
             if opt.classification:
-                wk = torch.sum(labels[is_labeled,i],dim=0)/labels.shape[0]
-                wk = (1-wk)*(1-wk)    
-                loss_scl_tmp = loss_scl_tmp+wk*loss_scl
+                if torch.sum(labels[is_labeled,i],dim=0)<labels.shape[0]:
+                    wk = torch.sum(labels[is_labeled,i],dim=0)/labels.shape[0]
+                    wk = (1-wk)*(1-wk)    
+                    loss_scl_tmp = loss_scl_tmp+wk*loss_scl
+                    total_num=total_num+1
             else:
                 loss_scl_tmp = loss_scl_tmp+loss_scl
-            
-
-        loss_task = loss_task_tmp/total_num
+                total_num=total_num+1
+        
+        if total_num==0:
+            continue
+        
+        loss_task = loss_task_tmp/labels.shape[1]
         loss_scl = loss_scl_tmp/total_num
-        loss_recon = loss_recon_tmp/total_num
         loss = opt.wscl*loss_scl+opt.wrecon*loss_recon+loss_task
 
 
@@ -465,7 +465,7 @@ def main():
                     test_acc = validation(test_dataset, model, optimizer, epoch, opt, mu, std)
                     logger.log_value('test auroc', test_acc, epoch)
                     print('test auroc:{}'.format(test_acc))
-                    print('val auroc{}'.format(acc))
+                    print('val auroc:{}'.format(acc))
             else:
                 if acc<best_acc:
                     best_acc = acc
@@ -474,7 +474,7 @@ def main():
                     test_acc = validation(test_dataset, model, optimizer, epoch, opt, mu, std)
                     logger.log_value('test rmse', test_acc, epoch)
                     print('test rmse:{}'.format(test_acc))
-                    print('val rmse{}'.format(acc))
+                    print('val rmse:{}'.format(acc))
 
         # save the last model
         print('best epoch : {}'.format(best_epoch))
@@ -486,18 +486,17 @@ def main():
         train_acc, train_smiles, train_graph, _ , _, train_smiles_sp, train_graph_sp, train_feature= validation(train_dataset, best_model.cuda(), optimizer, epoch, opt, mu, std, save_feature=1)
         val_acc, val_smiles, val_graph, _,_, val_smiles_sp, val_graph_sp,val_feature = validation(val_dataset,  best_model.cuda(), optimizer, epoch, opt, mu, std, save_feature=1)
         save_file = os.path.join(opt.save_folder, 'result.txt')
+        '''
         with open(opt.save_folder+'/feature.npy', 'wb') as f:                   
-            np.save(f, {'smiles':feature_smiles,'graph':feature_graph,'label':y_true, 'y_pred':y_pred, 'logit':logit, 'train_smiles':train_smiles, 'train_graph':train_graph,'val_smiles':val_smiles, 'val_graph':val_graph, 'train_smiles_sp':train_smiles_sp, 'train_graph_sp':train_graph_sp, 'train_feature':train_feature})
-
+            np.save(f, {'smiles':feature_smiles,'graph':feature_graph,'label':y_true, 'y_pred':y_pred, 'train_smiles':train_smiles, 'train_graph':train_graph,'val_smiles':val_smiles, 'val_graph':val_graph, 'train_smiles_sp':train_smiles_sp, 'train_graph_sp':train_graph_sp, 'train_feature':train_feature})
+        ''' 
         txtFile=open(save_file,"w")
-        txtFile.write(str(val_acc)+'\n')
-        txtFile.write(str(test_acc)+'\n')
-        txtFile.write(str(best_epoch)+'\n')
-        txtFile.write(str(ll)+'\n')
+        txtFile.write('validation:'+str(val_acc)+'\n')
+        txtFile.write('test:'+str(test_acc)+'\n')
+        txtFile.write('best epoch:'+str(best_epoch)+'\n')
         txtFile.close()
         
         print('Val Result:{}'.format(val_acc))
         print('Test Result:{}'.format(test_acc))
-        print(ll)
 if __name__ == '__main__':
     main()
