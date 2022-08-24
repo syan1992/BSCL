@@ -1,9 +1,5 @@
-import torch
 import torch.nn as nn
-import torch.nn.functional as F
-from transformers import RobertaConfig, RobertaTokenizerFast, Trainer, TrainingArguments
-from transformers import PreTrainedModel, RobertaModel
-import random
+from transformers import RobertaConfig, RobertaModel
 
 
 class SMILESBert(nn.Module):

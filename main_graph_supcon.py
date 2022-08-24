@@ -1,46 +1,34 @@
-from __future__ import print_function
-import pdb
 import os
-
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-import sys
-import argparse
 import time
 import math
+import argparse
+from copy import deepcopy
 
-import tensorboard_logger as tb_logger
+import numpy as np
+from tqdm import tqdm
 import torch
 import torch.backends.cudnn as cudnn
-from torchvision import transforms, datasets
+import torch.nn.functional as F
+import tensorboard_logger as tb_logger
+from torch_geometric.data import DataLoader
 
+from models.deepgcn import SupConDeeperGCN
+from models.SMILESBert import SMILESBert
+from utils.evaluate import Evaluator
+from utils.load_our_dataset import PygOurDataset
 from utils.util import (
     AverageMeter,
     adjust_learning_rate,
-    warmup_learning_rate,
     set_optimizer,
     save_model,
 )
-from utils.load_our_dataset import PygOurDataset
-from torch_geometric.data import DataLoader
-from copy import deepcopy
-from models.deepgcn import DeeperGCN, SupConDeeperGCN
-from models.SMILESBert import SMILESBert
-from tqdm import tqdm
-
-
-import numpy as np
-
-from torch_geometric.utils.convert import to_networkx
-import matplotlib.pyplot as plt
-from utils.evaluate import Evaluator
-import torch.nn.functional as F
-import copy
 
 try:
     import apex
-    from apex import amp, optimizers
 except ImportError:
     pass
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 
 def parse_option():

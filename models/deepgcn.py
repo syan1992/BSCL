@@ -1,27 +1,9 @@
-from sklearn import preprocessing
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score
-from sklearn.model_selection import GridSearchCV, KFold, StratifiedKFold
-from sklearn.model_selection import cross_val_score
-from sklearn.svm import SVC, LinearSVC
-from torch.nn import Sequential, Linear, ReLU
-from torch_geometric.data import DataLoader
-from torch_geometric.datasets import TUDataset
-from torch_geometric.nn import (
-    GINConv,
-    global_add_pool,
-    Set2Set,
-    GCNConv,
-    global_mean_pool,
-    global_max_pool,
-)
-from tqdm import tqdm
 import numpy as np
-import os.path as osp
-import sys
 import torch
 import torch.nn.functional as F
+from torch.nn import Linear
+from torch_geometric.nn import global_add_pool, global_mean_pool, global_max_pool
+
 from models.deepgcn_vertex import GENConv
 from models.deepgcn_nn import AtomEncoder, BondEncoder, MLP, norm_layer
 
