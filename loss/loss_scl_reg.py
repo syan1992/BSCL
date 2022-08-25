@@ -42,8 +42,8 @@ class SupConLoss(nn.Module):
         mask_init = mask
 
         ############################anchor graph###############################
-        anchor_feature = contrast_feature
-        anchor_count = contrast_count
+        anchor_feature = contrast_feature_graph
+        anchor_count = 1
 
         # anchor graph contrast SMILES
         batch_size = features.shape[0]
@@ -103,8 +103,7 @@ class SupConLoss(nn.Module):
         loss = -(self.temperature / self.base_temperature) * mean_log_prob_pos
         loss_graph_smiles = loss.view(anchor_count, -1).mean()
 
-        # -----------------------------------------------------------------------
-        # anchor SMILES contrast graph------------------------------------------
+        # anchor SMILES contrast graph
         batch_size = features.shape[0]
 
         labels = labels.contiguous().view(-1, 1)

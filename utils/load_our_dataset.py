@@ -73,7 +73,9 @@ class PygOurDataset(InMemoryDataset):
             exit(-1)
 
     def process(self):
-        data_df = pd.read_csv(osp.join(self.raw_dir, self.phase + "_" + self.dataname + ".csv"))
+        data_df = pd.read_csv(
+            os.path.join(self.raw_dir, self.phase + "_" + self.dataname + ".csv")
+        )
         smiles_list = data_df["smiles"]
         homolumogap_list = data_df[data_df.columns.difference(["smiles", "mol_id", "num", "name"])]
 
@@ -103,8 +105,8 @@ class PygOurDataset(InMemoryDataset):
             data.y = torch.Tensor([homolumogap])
             data.input_ids = torch.Tensor(encodings.input_ids[i])
             data.attention_mask = torch.Tensor(encodings.attention_mask[i])
-            # data.mgf = torch.tensor(mgf)
-            # data.maccs = torch.tensor(maccs)
+            data.mgf = torch.tensor(mgf)
+            data.maccs = torch.tensor(maccs)
             data_list.append(data)
 
         if self.pre_transform is not None:

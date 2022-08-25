@@ -1,10 +1,7 @@
+import torch
 import numpy as np
 from sklearn.metrics import roc_auc_score, average_precision_score
 
-try:
-    import torch
-except ImportError:
-    torch = None
 
 ### Evaluator for graph classification
 class Evaluator:
@@ -34,10 +31,10 @@ class Evaluator:
             """
 
             # converting to torch.Tensor to numpy on cpu
-            if torch is not None and isinstance(y_true, torch.Tensor):
+            if isinstance(y_true, torch.Tensor):
                 y_true = y_true.detach().cpu().numpy()
 
-            if torch is not None and isinstance(y_pred, torch.Tensor):
+            if isinstance(y_pred, torch.Tensor):
                 y_pred = y_pred.detach().cpu().numpy()
 
             ## check type
@@ -255,9 +252,7 @@ class Evaluator:
         return {"acc": sum(acc_list) / len(acc_list)}
 
     def _eval_F1(self, seq_ref, seq_pred):
-        # '''
-        #     compute F1 score averaged over samples
-        # '''
+        #  compute F1 score averaged over samples
 
         precision_list = []
         recall_list = []

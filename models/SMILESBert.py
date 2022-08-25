@@ -3,10 +3,8 @@ from transformers import RobertaConfig, RobertaModel
 
 
 class SMILESBert(nn.Module):
-    def __init__(self, num_tasks=1):
+    def __init__(self):
         super(SMILESBert, self).__init__()
-        dim_in = 512
-        feat_dim = 128
         self.bertConfig = RobertaConfig.from_pretrained("seyonec/ChemBERTa_zinc250k_v2_40k")
         self.roberta = RobertaModel(self.bertConfig, add_pooling_layer=False)
         self.model = RobertaModel.from_pretrained(
