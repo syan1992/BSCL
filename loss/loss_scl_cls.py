@@ -31,7 +31,6 @@ class SupConLoss(nn.Module):
         mask_init = mask
 
         ############################anchor graph###############################
-
         anchor_feature = contrast_feature_graph
         anchor_count = 1
 
@@ -74,10 +73,9 @@ class SupConLoss(nn.Module):
         loss_graph_smiles = loss.view(anchor_count, -1).mean()
 
         ############################anchor SMILES###############################
-<<<<<<< HEAD
-
         anchor_feature = contrast_feature_smiles
         anchor_count = 1
+<<<<<<< HEAD
 =======
         if self.contrast_mode == "one":
             anchor_feature = contrast_feature_smiles
@@ -89,6 +87,9 @@ class SupConLoss(nn.Module):
             raise ValueError("Unknown mode: {}".format(self.contrast_mode))
 >>>>>>> improve the linting scores
 
+=======
+        
+>>>>>>> improve the linting scores
         # anchor SMILES contrast graph
         batch_size = features.shape[0]
 
