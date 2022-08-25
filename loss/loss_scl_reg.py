@@ -103,6 +103,7 @@ class SupConLoss(nn.Module):
         loss = -(self.temperature / self.base_temperature) * mean_log_prob_pos
         loss_graph_smiles = loss.view(anchor_count, -1).mean()
 
+        ############################anchor SMILES###############################
         # anchor SMILES contrast graph
         batch_size = features.shape[0]
 
