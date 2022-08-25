@@ -1,46 +1,34 @@
-from __future__ import print_function
-import pdb
 import os
-
-os.environ["CUDA_VISIBLE_DEVICES"] = "0"
-import sys
-import argparse
 import time
 import math
+import argparse
+from copy import deepcopy
 
-import tensorboard_logger as tb_logger
+import numpy as np
+from tqdm import tqdm
 import torch
 import torch.backends.cudnn as cudnn
-from torchvision import transforms, datasets
+import torch.nn.functional as F
+import tensorboard_logger as tb_logger
+from torch_geometric.data import DataLoader
 
+from models.deepgcn import SupConDeeperGCN
+from models.SMILESBert import SMILESBert
+from utils.evaluate import Evaluator
+from utils.load_our_dataset import PygOurDataset
 from utils.util import (
     AverageMeter,
     adjust_learning_rate,
-    warmup_learning_rate,
     set_optimizer,
     save_model,
 )
-from utils.load_our_dataset import PygOurDataset
-from torch_geometric.data import DataLoader
-from copy import deepcopy
-from models.deepgcn import DeeperGCN, SupConDeeperGCN
-from models.SMILESBert import SMILESBert
-from tqdm import tqdm
-
-
-import numpy as np
-
-from torch_geometric.utils.convert import to_networkx
-import matplotlib.pyplot as plt
-from utils.evaluate import Evaluator
-import torch.nn.functional as F
-import copy
 
 try:
     import apex
-    from apex import amp, optimizers
 except ImportError:
     pass
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 
 def parse_option():
@@ -288,7 +276,7 @@ def set_model(opt):
     model_1 = SupConDeeperGCN(
         num_tasks=opt.num_tasks, mlp_layers=opt.mlp_layers, num_gc_layers=opt.num_gc_layers
     )
-    model_2 = SMILESBert(num_tasks=opt.num_tasks)
+    model_2 = SMILESBert()
     model = Classifier(model_1, model_2, opt)
 
     for name, param in model.named_parameters():
@@ -331,7 +319,6 @@ def train(
     criterion_mse,
     criterion_task,
     optimizer,
-    epoch,
     opt,
     mu=0,
     std=0,
@@ -350,8 +337,7 @@ def train(
     train_loader = DataLoader(train_dataset, batch_size=opt.batch_size, drop_last=True)
     end = time.time()
 
-    logit = []
-    for step, batch in enumerate(tqdm(train_loader, desc="Iteration")):
+    for _, batch in enumerate(tqdm(train_loader, desc="Iteration")):
         batch = batch.to("cuda")
         data_time.update(time.time() - end)
 
@@ -368,10 +354,10 @@ def train(
             f1_recon,
             f2_recon,
             o,
-            f1_sp,
-            f2_sp,
-            f1_co,
-            f2_co,
+            _,
+            _,
+            _,
+            _,
             f1_raw,
             f2_raw,
         ) = model(batch, opt)
@@ -379,7 +365,6 @@ def train(
 
         loss_task_tmp = 0
         loss_scl_tmp = 0
-        loss_recon_tmp = 0
         total_num = 0
 
         loss_recon = (criterion_mse(f1_recon, f1_raw) + criterion_mse(f2_recon, f2_raw)) / 2.0
@@ -423,7 +408,7 @@ def train(
     return losses_task.avg, losses_recon.avg, losses_scl.avg, losses.avg
 
 
-def validation(val_dataset, model, optimizer, epoch, opt, mu=0, std=0, save_feature=0):
+def validation(val_dataset, model, opt, mu=0, std=0, save_feature=0):
     model.eval()
 
     if opt.classification:
@@ -437,14 +422,13 @@ def validation(val_dataset, model, optimizer, epoch, opt, mu=0, std=0, save_feat
     with torch.no_grad():
         y_true = []
         y_pred = []
-        y_pred_1 = []
         if save_feature:
             feature_smiles = []
             feature_graph = []
             feature_smiles_sp = []
             feature_graph_sp = []
             feature = []
-        for step, batch in enumerate(tqdm(val_loader, desc="Iteration")):
+        for _, batch in enumerate(tqdm(val_loader, desc="Iteration")):
             batch = batch.to("cuda")
             o, f1_sp, f2_sp, f1_co, f2_co, h = model(batch, opt, "valid")
 
@@ -516,8 +500,6 @@ def main():
         else:
             mu, std = calmean(train_dataset)
 
-        model_name_before = opt.model_name
-
         # build model and criterion
         model, criterion_scl, criterion_mse, criterion_task = set_model(opt)
 
@@ -553,7 +535,6 @@ def main():
                 criterion_mse,
                 criterion_task,
                 optimizer,
-                epoch,
                 opt,
                 mu,
                 std,
@@ -561,7 +542,7 @@ def main():
             time2 = time.time()
             print("epoch {}, total time {:.2f}".format(epoch, time2 - time1))
 
-            acc = validation(val_dataset, model, optimizer, epoch, opt, mu, std)
+            acc = validation(val_dataset, model, opt, mu, std)
 
             # tensorboard logger
             logger.log_value("loss_task", loss_task, epoch)
@@ -575,7 +556,7 @@ def main():
                     best_acc = acc
                     best_model = deepcopy(model).cpu()
                     best_epoch = epoch
-                    test_acc = validation(test_dataset, model, optimizer, epoch, opt, mu, std)
+                    test_acc = validation(test_dataset, model, opt, mu, std)
                     logger.log_value("test auroc", test_acc, epoch)
                     print("test auroc:{}".format(test_acc))
                     print("val auroc:{}".format(acc))
@@ -584,7 +565,7 @@ def main():
                     best_acc = acc
                     best_model = deepcopy(model).cpu()
                     best_epoch = epoch
-                    test_acc = validation(test_dataset, model, optimizer, epoch, opt, mu, std)
+                    test_acc = validation(test_dataset, model, opt, mu, std)
                     logger.log_value("test rmse", test_acc, epoch)
                     print("test rmse:{}".format(test_acc))
                     print("val rmse:{}".format(acc))
@@ -594,47 +575,10 @@ def main():
         save_file = os.path.join(opt.save_folder, "last_" + str(best_epoch) + ".pth")
         save_model(best_model, optimizer, opt, opt.epochs, save_file)
 
-        (
-            test_acc,
-            feature_smiles,
-            feature_graph,
-            y_true,
-            y_pred,
-            feature_smiles_sp,
-            feature_graph_sp,
-            feature,
-        ) = validation(
-            test_dataset, best_model.cuda(), optimizer, epoch, opt, mu, std, save_feature=1
-        )
-        (
-            train_acc,
-            train_smiles,
-            train_graph,
-            _,
-            _,
-            train_smiles_sp,
-            train_graph_sp,
-            train_feature,
-        ) = validation(
-            train_dataset, best_model.cuda(), optimizer, epoch, opt, mu, std, save_feature=1
-        )
-        (
-            val_acc,
-            val_smiles,
-            val_graph,
-            _,
-            _,
-            val_smiles_sp,
-            val_graph_sp,
-            val_feature,
-        ) = validation(
-            val_dataset, best_model.cuda(), optimizer, epoch, opt, mu, std, save_feature=1
-        )
+        test_acc = validation(test_dataset, best_model.cuda(), opt, mu, std)
+        val_acc = validation(val_dataset, best_model.cuda(), opt, mu, std)
         save_file = os.path.join(opt.save_folder, "result.txt")
-        """
-        with open(opt.save_folder+'/feature.npy', 'wb') as f:                   
-            np.save(f, {'smiles':feature_smiles,'graph':feature_graph,'label':y_true, 'y_pred':y_pred, 'train_smiles':train_smiles, 'train_graph':train_graph,'val_smiles':val_smiles, 'val_graph':val_graph, 'train_smiles_sp':train_smiles_sp, 'train_graph_sp':train_graph_sp, 'train_feature':train_feature})
-        """
+
         txtFile = open(save_file, "w")
         txtFile.write("validation:" + str(val_acc) + "\n")
         txtFile.write("test:" + str(test_acc) + "\n")

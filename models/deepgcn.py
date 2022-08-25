@@ -1,27 +1,9 @@
-from sklearn import preprocessing
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.metrics import accuracy_score
-from sklearn.model_selection import GridSearchCV, KFold, StratifiedKFold
-from sklearn.model_selection import cross_val_score
-from sklearn.svm import SVC, LinearSVC
-from torch.nn import Sequential, Linear, ReLU
-from torch_geometric.data import DataLoader
-from torch_geometric.datasets import TUDataset
-from torch_geometric.nn import (
-    GINConv,
-    global_add_pool,
-    Set2Set,
-    GCNConv,
-    global_mean_pool,
-    global_max_pool,
-)
-from tqdm import tqdm
 import numpy as np
-import os.path as osp
-import sys
 import torch
 import torch.nn.functional as F
+from torch.nn import Linear
+from torch_geometric.nn import global_add_pool, global_mean_pool, global_max_pool
+
 from models.deepgcn_vertex import GENConv
 from models.deepgcn_nn import AtomEncoder, BondEncoder, MLP, norm_layer
 
@@ -101,7 +83,7 @@ class DeeperGCN(torch.nn.Module):
             for layer in range(num_gc_layers - 1):
                 self.mlp_virtualnode_list.append(MLP([hidden_channels] * 3, norm=norm))
 
-        for i in range(num_gc_layers):
+        for _ in range(num_gc_layers):
             conv = GENConv(
                 hidden_channels,
                 hidden_channels,
@@ -230,36 +212,10 @@ class DeeperGCN(torch.nn.Module):
         return ret, y
 
 
-class Net(torch.nn.Module):
-    def __init__(self):
-        super(Net, self).__init__()
-
-        try:
-            num_features = dataset.num_features
-        except:
-            num_features = 1
-        dim = 32
-
-        self.encoder = Encoder(num_features, dim)
-
-        self.fc1 = Linear(dim * 5, dim)
-        self.fc2 = Linear(dim, dataset.num_classes)
-
-    def forward(self, x, edge_index, batch):
-        if x is None:
-            x = torch.ones(batch.shape[0]).to(device)
-
-        x, _ = self.encoder(x, edge_index, batch)
-        x = F.relu(self.fc1(x))
-        x = F.dropout(x, p=0.5, training=self.training)
-        x = self.fc2(x)
-        return F.log_softmax(x, dim=-1)
-
-
 class SupConDeeperGCN(torch.nn.Module):
     """backbone + projection head"""
 
-    def __init__(self, feat_dim=128, num_tasks=1, mlp_layers=1, num_gc_layers=7):
+    def __init__(self, num_tasks=1, mlp_layers=1, num_gc_layers=7):
         super(SupConDeeperGCN, self).__init__()
         dim = 256
         num_gc_layers = num_gc_layers
@@ -292,7 +248,7 @@ class SupConDeeperGCN(torch.nn.Module):
         self.dense = torch.nn.Linear(256, 128)
         self.dropout = torch.nn.Dropout(0.5)
 
-    def forward(self, batch, phase="train"):
+    def forward(self, batch):
         feat = self.encoder(batch.x, batch.edge_index, batch.edge_attr, batch.batch)
         feat = self.dropout(feat)
         feat = self.dense(feat)

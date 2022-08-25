@@ -1,26 +1,17 @@
 import os
-import os.path as osp
-import shutil
-from ogb.utils.mol import smiles2graph
-from ogb.utils.torch_util import replace_numpy_with_torchtensor
-from ogb.utils.url import decide_download, download_url, extract_zip
+from itertools import repeat
+
 import pandas as pd
-import numpy as np
 from tqdm import tqdm
-import torch
-import argparse
-
-from torch_geometric.data import InMemoryDataset
-from torch_geometric.data import Data
-from itertools import repeat, product, chain
-
-import networkx as nx
-from torch_geometric.utils.convert import to_networkx
 import matplotlib.pyplot as plt
-
-from torch_geometric.utils import dropout_adj
-from transformers import RobertaConfig, RobertaTokenizerFast, Trainer, TrainingArguments
 from rdkit.Chem import AllChem
+import networkx as nx
+import torch
+from ogb.utils.mol import smiles2graph
+from ogb.utils.url import decide_download, download_url, extract_zip
+from torch_geometric.data import InMemoryDataset, Data
+from torch_geometric.utils.convert import to_networkx
+from transformers import RobertaTokenizerFast
 
 
 def getmorganfingerprint(mol):
@@ -51,7 +42,7 @@ class PygOurDataset(InMemoryDataset):
 
         self.original_root = root
         self.smiles2graph = smiles2graph
-        self.folder = osp.join(root, dataname)
+        self.folder = os.path.join(root, dataname)
         self.version = 1
         self.dataname = dataname
         self.phase = phase
@@ -82,7 +73,9 @@ class PygOurDataset(InMemoryDataset):
             exit(-1)
 
     def process(self):
-        data_df = pd.read_csv(osp.join(self.raw_dir, self.phase + "_" + self.dataname + ".csv"))
+        data_df = pd.read_csv(
+            os.path.join(self.raw_dir, self.phase + "_" + self.dataname + ".csv")
+        )
         smiles_list = data_df["smiles"]
         homolumogap_list = data_df[data_df.columns.difference(["smiles", "mol_id", "num", "name"])]
 
@@ -112,8 +105,8 @@ class PygOurDataset(InMemoryDataset):
             data.y = torch.Tensor([homolumogap])
             data.input_ids = torch.Tensor(encodings.input_ids[i])
             data.attention_mask = torch.Tensor(encodings.attention_mask[i])
-            # data.mgf = torch.tensor(mgf)
-            # data.maccs = torch.tensor(maccs)
+            data.mgf = torch.tensor(mgf)
+            data.maccs = torch.tensor(maccs)
             data_list.append(data)
 
         if self.pre_transform is not None:

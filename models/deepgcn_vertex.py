@@ -1,16 +1,10 @@
 import torch
-from torch import nn
 import torch.nn.functional as F
 import torch_geometric as tg
-from models.deepgcn_nn import MLP, act_layer, norm_layer, BondEncoder
-from torch_geometric.utils import remove_self_loops, add_self_loops
 from torch_geometric.nn import MessagePassing
-from torch_geometric.typing import PairTensor, Adj, OptTensor
-from typing import Union, Tuple, Optional
-from torch import Tensor
-import math
-from torch_geometric.utils import softmax
 from torch_scatter import scatter, scatter_softmax
+
+from models.deepgcn_nn import MLP, BondEncoder
 
 
 class GenMessagePassing(MessagePassing):
