@@ -276,7 +276,7 @@ def set_model(opt):
     model_1 = SupConDeeperGCN(
         num_tasks=opt.num_tasks, mlp_layers=opt.mlp_layers, num_gc_layers=opt.num_gc_layers
     )
-    model_2 = SMILESBert(num_tasks=opt.num_tasks)
+    model_2 = SMILESBert()
     model = Classifier(model_1, model_2, opt)
 
     for name, param in model.named_parameters():
