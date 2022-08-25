@@ -34,8 +34,9 @@ We save the model with the best performance on the validation set and evaluate t
 Both model and test results will be saved in the 'save' folder.
 
 ## Hyperparameters
-Some specific hyperparameters in this work, 
+Some specific hyperparameters in this work,  
 |  Name   | Description  |
+| :---        |    :----:   |
 |  wscl  | The weight of the supervised contrastive loss in the loss function. Suggest to test values in [0.1 to 1]|
 | wrecon  | The weight of the reconstruction loss in the loss function. Suggest to test values in [0.1 to 1]|
 | gamma1  | The hyperparameter of the weighted supervised contrastive loss for the regression task. Suggest to test values in [2,3,4] |
