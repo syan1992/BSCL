@@ -4,54 +4,53 @@ from typing import Callable
 
 import pandas as pd
 from tqdm import tqdm
-import matplotlib.pyplot as plt
 from rdkit.Chem import AllChem
 from rdkit.Chem.rdchem import Mol
-import networkx as nx
 import torch
 from ogb.utils.mol import smiles2graph
 from ogb.utils.url import decide_download, download_url, extract_zip
 from torch_geometric.data import InMemoryDataset, Data
-from torch_geometric.utils.convert import to_networkx
 from transformers import RobertaTokenizerFast
 
 
-def getmorganfingerprint(mol:Mol):
-    """get the ECCP fingerprint
+def getmorganfingerprint(mol: Mol):
+    """Get the ECCP fingerprint.
 
     Args:
-        mol (Mol): The molecule
+        mol (Mol): The molecule.
     """
     return list(AllChem.GetMorganFingerprintAsBitVect(mol, 2))
 
 
-def getmaccsfingerprint(mol:Mol):
-    """get the MACCS fingerprint
+def getmaccsfingerprint(mol: Mol):
+    """Get the MACCS fingerprint.
 
     Args:
-        mol (Mol): The molecule
+        mol (Mol): The molecule.
     """
     fp = AllChem.GetMACCSKeysFingerprint(mol)
     return [int(b) for b in fp.ToBitString()]
 
 
 class PygOurDataset(InMemoryDataset):
+    """Load datasets."""
+
     def __init__(
         self,
-        root:str="dataset",
-        phase:str="train",
-        dataname:str="hiv",
-        smiles2graph:Callable=smiles2graph,
+        root: str = "dataset",
+        phase: str = "train",
+        dataname: str = "hiv",
+        smiles2graph: Callable = smiles2graph,
         transform=None,
         pre_transform=None,
     ):
-        """Load our dataset. 
-
+        """
         Args:
             root (str, optional): The local position of the dataset. Defaults to "dataset".
             phase (str, optional): The data is train, validation or test set. Defaults to "train".
             dataname (str, optional): The name of the dataset. Defaults to "hiv".
-            smiles2graph (Callable, optional): Generate the molecular graph from the SMILES string. Defaults to smiles2graph.
+            smiles2graph (Callable, optional): Generate the molecular graph from the SMILES
+                string. Defaults to smiles2graph.
         """
 
         self.original_root = root

@@ -8,7 +8,8 @@ from models.deepgcn_nn import MLP, BondEncoder
 
 
 class GenMessagePassing(MessagePassing):
-    """Aggregation methods from DeeperGCN"""
+    """Aggregation methods from DeeperGCN."""
+
     def __init__(
         self, aggr="softmax", t=1.0, learn_t=False, p=1.0, learn_p=False, y=0.0, learn_y=False
     ):
@@ -106,7 +107,7 @@ class MsgNorm(torch.nn.Module):
 class GENConv(GenMessagePassing):
     """
     GENeralized Graph Convolution (GENConv): https://arxiv.org/pdf/2006.07739.pdf
-    SoftMax  &  PowerMean Aggregation
+    SoftMax & PowerMean Aggregation.
     """
 
     def __init__(

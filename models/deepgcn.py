@@ -3,7 +3,6 @@ import numpy as np
 import torch
 from torch import Tensor
 import torch.nn.functional as F
-from torch.nn import Linear
 from torch_geometric.nn import global_add_pool, global_mean_pool, global_max_pool
 
 from models.deepgcn_vertex import GENConv
@@ -215,8 +214,8 @@ class DeeperGCN(torch.nn.Module):
 
 
 class SupConDeeperGCN(torch.nn.Module):
-    def __init__(self, num_tasks:int=1, mlp_layers:int=1, num_gc_layers:int=7):
-        """The molecular graph branch. 
+    def __init__(self, num_tasks: int = 1, mlp_layers: int = 1, num_gc_layers: int = 7):
+        """The molecular graph branch.
 
         Args:
             num_tasks (int, optional): Number of tasks in the dataset. Defaults to 1.
@@ -255,13 +254,13 @@ class SupConDeeperGCN(torch.nn.Module):
         self.dense = torch.nn.Linear(256, 128)
         self.dropout = torch.nn.Dropout(0.5)
 
-    def forward(self, batch:Tensor):
+    def forward(self, batch: Tensor):
         """Generate the embedding of the molecular graph branch.
         Args:
-            batch (Tensor) : A batch of data of the current epoch. 
+            batch (Tensor) : A batch of data of the current epoch.
 
         Returns:
-            The embedding of the molecular graph branch. 
+            The embedding of the molecular graph branch.
         """
         feat = self.encoder(batch.x, batch.edge_index, batch.edge_attr, batch.batch)
         feat = self.dropout(feat)

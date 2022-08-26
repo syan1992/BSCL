@@ -3,29 +3,24 @@ import time
 import math
 import argparse
 from copy import deepcopy
-from typing import Dict, Set, Union, List,Callable
+from typing import Set, Callable, Any
 
 import numpy as np
 from tqdm import tqdm
 import torch
 from torch import Tensor
-from torch.nn import Sequential, Module
+from torch.nn import Module
 import torch.backends.cudnn as cudnn
 import torch.nn.functional as F
-import tensorboard_logger as tb_logger
-from torch_geometric.data import DataLoader, Data
 from torch.optim import Optimizer
+from torch_geometric.data import DataLoader, Data
+import tensorboard_logger as tb_logger
 
 from models.deepgcn import SupConDeeperGCN
-from models.SMILESBert import SMILESBert
+from models.smiles_bert import SMILESBert
 from utils.evaluate import Evaluator
-from utils.load_our_dataset import PygOurDataset
-from utils.util import (
-    AverageMeter,
-    adjust_learning_rate,
-    set_optimizer,
-    save_model,
-)
+from utils.load_dataset import PygOurDataset
+from utils.util import AverageMeter, adjust_learning_rate, set_optimizer, save_model
 
 try:
     import apex
@@ -37,6 +32,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 def parse_option():
     """Parse arguments."""
+
     parser = argparse.ArgumentParser("argument for training")
 
     parser.add_argument("--classification", action="store_true", help="classification task")
@@ -62,7 +58,7 @@ def parse_option():
 
     parser.add_argument("--model", type=str, default="DeeperGCN")
     parser.add_argument("--dataset", type=str, default="freesolv", help="dataset")
-    parser.add_argument("--data_folder", type=str, default=None, help="path to custom dataset")
+    parser.add_argument("--data_dir", type=str, default=None, help="path to custom dataset")
     parser.add_argument("--num_tasks", type=int, default=1, help="parameter for task number")
 
     parser.add_argument("--temp", type=float, default=0.07, help="temperature for loss function")
@@ -134,34 +130,34 @@ else:
     from loss.loss_scl_reg import SupConLoss
 
 
-def set_loader(opt:Dict[str,Union[str,float,int,List]], dn:str) -> Set[Data]:
-    """Load dataset from opt.dataset_folder
+def set_loader(opt: Any, dataname: str) -> Set[Data]:
+    """Load dataset from opt.datas_dir.
 
     Args:
-        opt (Dict[str,Union[str,float,int,List]]): Parsed arguments.
-        dn (str): The folder name of the dataset.
+        opt (Any): Parsed arguments.
+        dataname (str): The folder name of the dataset.
 
     Returns:
         Set[Data]: train/validation/test sets.
     """
 
-    rr = opt.data_folder
-    train_dataset = PygOurDataset(root=rr, phase="train", dataname=dn)
-    test_dataset = PygOurDataset(root=rr, phase="test", dataname=dn)
-    val_dataset = PygOurDataset(root=rr, phase="valid", dataname=dn)
+    train_dataset = PygOurDataset(root=opt.data_dir, phase="train", dataname=dataname)
+    test_dataset = PygOurDataset(root=opt.data_dir, phase="test", dataname=dataname)
+    val_dataset = PygOurDataset(root=opt.data_dir, phase="valid", dataname=dataname)
 
     return train_dataset, test_dataset, val_dataset
 
 
 class BSCL(torch.nn.Sequential):
-    """The BSCL network """
-    def __init__(self, model_1:Module, model_2:Module, opt:Dict[str,Union[str,float,int,List]]):
-        """Initialization of the BSCL network
+    """The BSCL network."""
+
+    def __init__(self, model_1: Module, model_2: Module, opt: Any):
+        """Initialization of the BSCL network.
 
         Args:
             model_1 (Module): The graph network
             model_2 (Module): The SMILES network
-            opt (Dict[str,Union[str,float,int,List]]): Parsed arguments
+            opt (Any): Parsed arguments
         """
         super(BSCL, self).__init__()
         self.model_1 = model_1
@@ -231,16 +227,16 @@ class BSCL(torch.nn.Sequential):
             "fusion_layer_3", torch.nn.Linear(in_features=dim_feat * 2, out_features=opt.num_tasks)
         )
 
-    def forward(self, batch:Tensor, opt:Dict[str,Union[str,float,int,List]], phase:str="train"):
+    def forward(self, batch: Tensor, opt: Any, phase: str = "train"):
         """The network of the BSCL.
 
         Args:
             batch1 (Tensor): Input batch
-            opt (Dict[str,Union[str,float,int,List]]): Parsed arguments.
+            opt (Any): Parsed arguments.
             phase (str, optional): Train phase or validation phase. Defaults to "train".
 
         Returns:
-            Prediction results and representations learend by the model.  
+            Prediction results and representations learend by the model.
         """
         if opt.classification and opt.global_feature:
             global_feature = torch.cat(
@@ -304,14 +300,14 @@ class BSCL(torch.nn.Sequential):
             return output, f1_sp, f2_sp, f1_cross, f2_cross, h_out
 
 
-def set_model(opt:Dict[str,Union[str,float,int,List]]):
+def set_model(opt: Any):
     """Initialization of the model and loss functions.
 
     Args:
-        opt (Dict[str,Union[str,float,int,List]]): Parsed arguments.
+        opt (Any): Parsed arguments.
 
     Returns:
-        Return the model and the loss functions. 
+        Return the model and the loss functions.
     """
     model_1 = SupConDeeperGCN(
         num_tasks=opt.num_tasks, mlp_layers=opt.mlp_layers, num_gc_layers=opt.num_gc_layers
@@ -353,31 +349,32 @@ def set_model(opt:Dict[str,Union[str,float,int,List]]):
 
 
 def train(
-    train_dataset:Set[Data],
-    model:Sequential,
-    criterion_scl:Callable,
-    criterion_mse:Callable,
-    criterion_task:Callable,
-    optimizer:Optimizer,
-    opt:Dict[str,Union[str,float,int,List]],
-    mu:int=0,
-    std:int=0,
+    train_dataset: Set[Data],
+    model: torch.nn.Sequential,
+    criterion_scl: Callable,
+    criterion_mse: Callable,
+    criterion_task: Callable,
+    optimizer: Optimizer,
+    opt: Any,
+    mu: int = 0,
+    std: int = 0,
 ):
     """One epoch training.
 
     Args:
         train_dataset (Set[Data]): Train set.
-        model (Sequential): Model
+        model (torch.nn.Sequential): Model
         criterion_scl (Callable): Supervised contrastive loss function
         criterion_mse (Callable): Reconstruction loss function
         criterion_task (Callable): Task loss function
         optimizer (Optimizer): Optimizer
-        opt (Dict[str,Union[str,float,int,List]]): Parsed arguments
+        opt (Any): Parsed arguments
         mu (int, optional): Mean value of the train set for the regression task. Defaults to 0.
-        std (int, optional): Standard deviation of the train set for the regression task. Defaults to 0.
+        std (int, optional): Standard deviation of the train set for the regression task.
+            Defaults to 0.
 
     Returns:
-        Losses. 
+        Losses.
     """
     model.train()
 
@@ -463,19 +460,29 @@ def train(
     return losses_task.avg, losses_recon.avg, losses_scl.avg, losses.avg
 
 
-def validation(val_dataset:Set[Data], model:Sequential, opt:Dict[str,Union[str,float,int,List]], mu:int=0, std:int=0, save_feature:int=0):
-    """Validation
+def validation(
+    dataset: Set[Data],
+    model: torch.nn.Sequential,
+    opt: Any,
+    mu: int = 0,
+    std: int = 0,
+    save_feature: int = 0,
+):
+    """Calculate performance metrics.
 
     Args:
-        val_dataset (Set[Data]): Validation set.
-        model (Sequential): Model
-        opt (Dict[str,Union[str,float,int,List]]): Parsed arguments
-        mu (int, optional): Mean value of the train set for the regression task. Defaults to 0.
-        std (int, optional): Standard deviation of the train set for the regression task. Defaults to 0.
-        save_feature (int, optional): Whether save the learned features or not. Defaults to 0.
+        dataset (Set[Data]): A dataset.
+        model (torch.nn.Sequential): Model.
+        opt (Any): Parsed arguments.
+        mu (int, optional): Mean value of the train set for the regression task.
+            Defaults to 0.
+        std (int, optional): Standard deviation of the train set for the regression task.
+            Defaults to 0.
+        save_feature (int, optional): Whether save the learned features or not.
+            Defaults to 0.
 
     Returns:
-        auroc or rmse value. 
+        auroc or rmse value.
     """
     model.eval()
 
@@ -483,8 +490,8 @@ def validation(val_dataset:Set[Data], model:Sequential, opt:Dict[str,Union[str,f
         evaluator = Evaluator(name=opt.dataset, num_tasks=opt.num_tasks, eval_metric="rocauc")
     else:
         evaluator = Evaluator(name=opt.dataset, num_tasks=opt.num_tasks, eval_metric="rmse")
-    val_loader = DataLoader(
-        val_dataset, batch_size=opt.batch_size, shuffle=False, num_workers=opt.num_workers
+    data_loader = DataLoader(
+        dataset, batch_size=opt.batch_size, shuffle=False, num_workers=opt.num_workers
     )
 
     with torch.no_grad():
@@ -496,7 +503,7 @@ def validation(val_dataset:Set[Data], model:Sequential, opt:Dict[str,Union[str,f
             feature_smiles_sp = []
             feature_graph_sp = []
             feature = []
-        for _, batch in enumerate(tqdm(val_loader, desc="Iteration")):
+        for _, batch in enumerate(tqdm(data_loader, desc="Iteration")):
             batch = batch.to("cuda")
             o, f1_sp, f2_sp, f1_co, f2_co, h = model(batch, opt, "valid")
 
@@ -548,28 +555,28 @@ def validation(val_dataset:Set[Data], model:Sequential, opt:Dict[str,Union[str,f
         return eval_result
 
 
-def calmean(dataset:Set[Data]):
-    """Calculate the mean value and the standard deviation value for the regression task. 
+def calmean(dataset: Set[Data]):
+    """Calculate the mean value and the standard deviation value for a regression task.
 
     Args:
-        dataset (Set[Data]): Train set of the regression task. 
+        dataset (Set[Data]): Train set of the regression task.
 
     Returns:
-        The mean value and the standard deviation value of the dataset. 
+        The mean value and the standard deviation value of the dataset.
     """
-    yy = []
+    labels = []
     for i in range(len(dataset)):
-        yy.append(dataset[i].y)
+        labels.append(dataset[i].y)
 
-    return torch.mean(torch.Tensor(yy)).to("cuda"), torch.std(torch.Tensor(yy)).to("cuda")
+    return torch.mean(torch.Tensor(labels)).to("cuda"), torch.std(torch.Tensor(labels)).to("cuda")
 
 
 def main():
 
-    for dn in [opt.dataset + "_1", opt.dataset + "_2", opt.dataset + "_3"]:
+    for dataname in [opt.dataset + "_1", opt.dataset + "_2", opt.dataset + "_3"]:
 
         # build data loader
-        train_dataset, test_dataset, val_dataset = set_loader(opt, dn)
+        train_dataset, test_dataset, val_dataset = set_loader(opt, dataname)
 
         if opt.classification:
             mu, std = 0, 0
