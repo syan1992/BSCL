@@ -34,7 +34,7 @@ class PygOurDataset(InMemoryDataset):
         pre_transform=None,
     ):
         """
-        Pytorch Geometric PCQM4M dataset object
+        Pytorch Geometric dataset object
             - root (str): the dataset folder will be located at root/pcqm4m_kddcup2021
             - smiles2graph (callable): A callable function that converts a SMILES string into a graph object
                 * The default smiles2graph requires rdkit to be installed

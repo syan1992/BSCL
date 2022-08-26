@@ -5,7 +5,14 @@ from sklearn.metrics import roc_auc_score, average_precision_score
 
 ### Evaluator for graph classification
 class Evaluator:
-    def __init__(self, name="hiv", num_tasks=1, eval_metric="rocauc"):
+    def __init__(self, name:str="hiv", num_tasks:int=1, eval_metric:str="rocauc"):
+        """Evaluator
+
+        Args:
+            name (str, optional): The name of the dataset. Defaults to "hiv".
+            num_tasks (int, optional): Number of tasks in the dataset. Defaults to 1.
+            eval_metric (str, optional): Metrics for the evaluation. Defaults to "rocauc".
+        """
         self.name = name
         self.num_tasks = num_tasks
         self.eval_metric = eval_metric
@@ -84,8 +91,16 @@ class Evaluator:
         else:
             raise ValueError("Undefined eval metric %s " % (self.eval_metric))
 
-    def eval(self, input_dict):
+    def eval(self, input_dict:Dict):
+        """_summary_
 
+        Args:
+            input_dict (Dict): The true value and the predict value of the dataset.
+                               The format of input_dict is like:
+                               input_dict = {"y_true": y_true, "y_pred": y_pred}
+        Returns:
+            A scalar value of the selected metric. 
+        """
         if self.eval_metric == "rocauc":
             y_true, y_pred = self._parse_and_check_input(input_dict)
             return self._eval_rocauc(y_true, y_pred)

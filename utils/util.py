@@ -1,5 +1,6 @@
 import math
 import numpy as np
+from typing import Dict
 
 import torch
 import torch.optim as optim
@@ -17,14 +18,22 @@ class AverageMeter(object):
         self.sum = 0
         self.count = 0
 
-    def update(self, val, n=1):
+    def update(self, val:float, n:int=1):
         self.val = val
         self.sum += val * n
         self.count += n
         self.avg = self.sum / self.count
 
 
-def adjust_learning_rate(args, optimizer, epoch, lr):
+def adjust_learning_rate(args:Dict, optimizer:Any, epoch:int, lr:float):
+    """Learning rate adjustment methods
+
+    Args:
+        args (Dict): Parsed arguments
+        optimizer (Any): optimizer
+        epoch (int): Current epoch
+        lr (float): the value of the learning rate
+    """
     if args.cosine:
         eta_min = lr * (args.lr_decay_rate**3)
         lr = eta_min + (lr - eta_min) * \
@@ -38,7 +47,16 @@ def adjust_learning_rate(args, optimizer, epoch, lr):
         param_group["lr"] = lr
 
 
-def warmup_learning_rate(args, epoch, batch_id, total_batches, optimizer):
+def warmup_learning_rate(args:Dict, epoch:int, batch_id:int, total_batches:int, optimizer:Any):
+    """Learning rate warmup method
+
+    Args:
+        args (Dict): Parse arguments
+        epoch (int): Current epoch
+        batch_id (int): The number of the current batch.
+        total_batches (int): The number of total batch. 
+        optimizer (Any): optimizer
+    """
     if args.warm and epoch <= args.warm_epochs:
         p = (batch_id + (epoch - 1) * total_batches) / \
             (args.warm_epochs * total_batches)
@@ -48,7 +66,12 @@ def warmup_learning_rate(args, epoch, batch_id, total_batches, optimizer):
             param_group["lr"] = lr
 
 
-def set_optimizer(opt, model):
+def set_optimizer(opt, model:Any):
+    """Initialize the optimizer.
+
+    Args:
+        opt (_type_): Parsed arguments. 
+    """
 
     optimizer = optim.Adam(
         model.parameters(), lr=opt.learning_rate, weight_decay=opt.weight_decay)
@@ -56,7 +79,13 @@ def set_optimizer(opt, model):
     return optimizer
 
 
-def save_model(model, optimizer, opt, epoch, save_file):
+def save_model(model:Any, optimizer:Any, opt:Dict, epoch:int, save_file:str):
+    """Save the model
+
+    Args:
+        save_file (str): The address to save the model. 
+    """
+
     print("==> Saving...")
     state = {
         "opt": opt,

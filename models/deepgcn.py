@@ -215,7 +215,14 @@ class DeeperGCN(torch.nn.Module):
 class SupConDeeperGCN(torch.nn.Module):
     """backbone + projection head"""
 
-    def __init__(self, num_tasks=1, mlp_layers=1, num_gc_layers=7):
+    def __init__(self, num_tasks:int=1, mlp_layers:int=1, num_gc_layers:int=7):
+        """The molecular graph branch. 
+
+        Args:
+            num_tasks (int, optional): Number of tasks in the dataset. Defaults to 1.
+            mlp_layers (int, optional): Number of mlp layers. Defaults to 1.
+            num_gc_layers (int, optional): Depth of the deepergcn model. Defaults to 7.
+        """
         super(SupConDeeperGCN, self).__init__()
         dim = 256
         num_gc_layers = num_gc_layers
@@ -248,7 +255,14 @@ class SupConDeeperGCN(torch.nn.Module):
         self.dense = torch.nn.Linear(256, 128)
         self.dropout = torch.nn.Dropout(0.5)
 
-    def forward(self, batch):
+    def forward(self, batch:Tensor):
+        """
+        Args:
+            batch (Tensor)
+
+        Returns:
+            The embedding of the molecular graph branch. 
+        """
         feat = self.encoder(batch.x, batch.edge_index, batch.edge_attr, batch.batch)
         feat = self.dropout(feat)
         feat = self.dense(feat)

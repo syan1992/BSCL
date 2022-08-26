@@ -3,10 +3,12 @@ import time
 import math
 import argparse
 from copy import deepcopy
+from typing import Dict, Set
 
 import numpy as np
 from tqdm import tqdm
 import torch
+from torch import Tensor
 import torch.backends.cudnn as cudnn
 import torch.nn.functional as F
 import tensorboard_logger as tb_logger
@@ -129,8 +131,16 @@ else:
     from loss.loss_scl_reg import SupConLoss
 
 
-def set_loader(opt, dn):
+def set_loader(opt:Dict, dn:str) -> Set:
+    """Load dataset from opt.dataset_folder.
 
+    Args:
+        opt (Dict): Parsed arguments.
+        dn (str): The folder name of the dataset. 
+
+    Returns:
+        Set: train/validation/test sets
+    """
     rr = opt.data_folder
     train_dataset = PygOurDataset(root=rr, phase="train", dataname=dn)
     test_dataset = PygOurDataset(root=rr, phase="test", dataname=dn)
@@ -209,28 +219,38 @@ class Classifier(torch.nn.Sequential):
             "fusion_layer_3", torch.nn.Linear(in_features=dim_feat * 2, out_features=opt.num_tasks)
         )
 
-    def forward(self, batch1, opt, phase="train"):
+    def forward(self, batch:Tensor, opt:Dict, phase:str="train"):
+        """The network of the BSCL.
+
+        Args:
+            batch1 (Tensor): Input batch
+            opt (Dict): Parsed arguments.
+            phase (str, optional): Train phase or validation phase. Defaults to "train".
+
+        Returns:
+            Prediction results and representations learend by the model.  
+        """
         if opt.classification and opt.global_feature:
             global_feature = torch.cat(
-                (batch1.mgf.view(batch1.y.shape[0], -1), batch1.maccs.view(batch1.y.shape[0], -1)),
+                (batch.mgf.view(batch1.y.shape[0], -1), batch.maccs.view(batch1.y.shape[0], -1)),
                 dim=1,
             ).float()
         elif not opt.classification and opt.global_feature:
             global_feature = F.normalize(
                 torch.cat(
                     (
-                        batch1.mgf.view(batch1.y.shape[0], -1),
-                        batch1.maccs.view(batch1.y.shape[0], -1),
+                        batch.mgf.view(batch1.y.shape[0], -1),
+                        batch.maccs.view(batch1.y.shape[0], -1),
                     ),
                     dim=1,
                 ).float(),
                 dim=1,
             )
 
-        f1_raw = self.model_1(batch1)
+        f1_raw = self.model_1(batch)
         f2_raw = self.model_2(
-            batch1.input_ids.view(batch1.y.shape[0], -1).int(),
-            batch1.attention_mask.view(batch1.y.shape[0], -1).int(),
+            batch1.input_ids.view(batch.y.shape[0], -1).int(),
+            batch1.attention_mask.view(batch.y.shape[0], -1).int(),
         )
         f1_sp = self.enc1_1(f1_raw)
         f2_sp = self.enc2_1(f2_raw)
@@ -272,7 +292,15 @@ class Classifier(torch.nn.Sequential):
             return o, f1_sp, f2_sp, f1_cross, f2_cross, h
 
 
-def set_model(opt):
+def set_model(opt:Dict):
+    """Initialization of the model and loss functions.
+
+    Args:
+        opt (Dict): Parsed arguments.
+
+    Returns:
+        Return the model and the loss functions. 
+    """
     model_1 = SupConDeeperGCN(
         num_tasks=opt.num_tasks, mlp_layers=opt.mlp_layers, num_gc_layers=opt.num_gc_layers
     )
@@ -313,17 +341,32 @@ def set_model(opt):
 
 
 def train(
-    train_dataset,
-    model,
-    criterion_scl,
-    criterion_mse,
-    criterion_task,
-    optimizer,
-    opt,
-    mu=0,
-    std=0,
+    train_dataset:Set,
+    model:Any,
+    criterion_scl:Any,
+    criterion_mse:Any,
+    criterion_task:Any,
+    optimizer:Any,
+    opt:Dict,
+    mu:int=0,
+    std:int=0,
 ):
-    """one epoch training"""
+    """One epoch training.
+
+    Args:
+        train_dataset (Set): Train set.
+        model (Any): Model
+        criterion_scl (Any): Supervised contrastive loss function
+        criterion_mse (Any): Reconstruction loss function
+        criterion_task (Any): Task loss function
+        optimizer (Any): Optimizer
+        opt (Dict): Parsed arguments
+        mu (int, optional): Mean value of the train set for the regression task. Defaults to 0.
+        std (int, optional): Standard deviation of the train set for the regression task. Defaults to 0.
+
+    Returns:
+        Losses. 
+    """
     model.train()
 
     batch_time = AverageMeter()
@@ -408,7 +451,20 @@ def train(
     return losses_task.avg, losses_recon.avg, losses_scl.avg, losses.avg
 
 
-def validation(val_dataset, model, opt, mu=0, std=0, save_feature=0):
+def validation(val_dataset:Set, model:Any, opt:Dict, mu:int=0, std:int=0, save_feature:int=0):
+    """Validation
+
+    Args:
+        val_dataset (Set): Validation set.
+        model (Any): Model
+        opt (Dict): Parsed arguments
+        mu (int, optional): Mean value of the train set for the regression task. Defaults to 0.
+        std (int, optional): Standard deviation of the train set for the regression task. Defaults to 0.
+        save_feature (int, optional): Whether save the learned features or not. Defaults to 0.
+
+    Returns:
+        auroc or rmse value. 
+    """
     model.eval()
 
     if opt.classification:
@@ -456,9 +512,9 @@ def validation(val_dataset, model, opt, mu=0, std=0, save_feature=0):
             }
 
         if opt.classification:
-            auroc = evaluator.eval(input_dict)["rocauc"]
+            eval_result = evaluator.eval(input_dict)["rocauc"]
         else:
-            auroc = evaluator.eval(input_dict)["rmse"]
+            eval_result = evaluator.eval(input_dict)["rmse"]
     if save_feature:
         feature_smiles = np.concatenate(feature_smiles)
         feature_graph = np.concatenate(feature_graph)
@@ -467,7 +523,7 @@ def validation(val_dataset, model, opt, mu=0, std=0, save_feature=0):
         feature = np.concatenate(feature)
 
         return (
-            auroc,
+            eval_result,
             feature_smiles,
             feature_graph,
             y_true,
@@ -477,10 +533,18 @@ def validation(val_dataset, model, opt, mu=0, std=0, save_feature=0):
             feature,
         )
     else:
-        return auroc
+        return eval_result
 
 
-def calmean(dataset):
+def calmean(dataset:Set):
+    """Calculate the mean value and the standard deviation value for the regression task. 
+
+    Args:
+        dataset (Set): Train set of the regression task. 
+
+    Returns:
+        The mean value and the standard deviation value of the dataset. 
+    """
     yy = []
     for i in range(len(dataset)):
         yy.append(dataset[i].y)
