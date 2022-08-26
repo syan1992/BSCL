@@ -4,6 +4,7 @@ from transformers import RobertaConfig, RobertaModel
 
 
 class SMILESBert(nn.Module):
+    """SMILES branch"""
     def __init__(self):
         super(SMILESBert, self).__init__()
         self.bertConfig = RobertaConfig.from_pretrained(
@@ -16,7 +17,7 @@ class SMILESBert(nn.Module):
         self.dropout = nn.Dropout(0.5)
 
     def forward(self, ids:Tensor, mask:Tensor):
-        """SMILES branch. 
+        """Generate the embedding of the SMILES branch. 
 
         Args:
             ids (Tensor): Encoding of the SMILES strings. 

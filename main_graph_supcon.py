@@ -3,16 +3,18 @@ import time
 import math
 import argparse
 from copy import deepcopy
-from typing import Dict, Set
+from typing import Dict, Set, Union, List
 
 import numpy as np
 from tqdm import tqdm
 import torch
 from torch import Tensor
+from torch.nn import Sequential, Module
 import torch.backends.cudnn as cudnn
 import torch.nn.functional as F
 import tensorboard_logger as tb_logger
-from torch_geometric.data import DataLoader
+from torch_geometric.data import DataLoader, Data
+from torch.optim import Optimizer
 
 from models.deepgcn import SupConDeeperGCN
 from models.SMILESBert import SMILESBert
@@ -34,6 +36,7 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 
 def parse_option():
+    """Parse arguments."""
     parser = argparse.ArgumentParser("argument for training")
 
     parser.add_argument("--classification", action="store_true", help="classification task")
@@ -131,16 +134,17 @@ else:
     from loss.loss_scl_reg import SupConLoss
 
 
-def set_loader(opt:Dict, dn:str) -> Set:
-    """Load dataset from opt.dataset_folder.
+def set_loader(opt:Dict[str,Union[str,float,int,List]], dn:str) -> Set[Data]:
+    """Load dataset from opt.dataset_folder
 
     Args:
-        opt (Dict): Parsed arguments.
-        dn (str): The folder name of the dataset. 
+        opt (Dict[str,Union[str,float,int,List]]): Parsed arguments.
+        dn (str): The folder name of the dataset.
 
     Returns:
-        Set: train/validation/test sets
+        Set[Data]: train/validation/test sets.
     """
+
     rr = opt.data_folder
     train_dataset = PygOurDataset(root=rr, phase="train", dataname=dn)
     test_dataset = PygOurDataset(root=rr, phase="test", dataname=dn)
@@ -149,9 +153,17 @@ def set_loader(opt:Dict, dn:str) -> Set:
     return train_dataset, test_dataset, val_dataset
 
 
-class Classifier(torch.nn.Sequential):
-    def __init__(self, model_1, model_2, opt):
-        super(Classifier, self).__init__()
+class BSCL(torch.nn.Sequential):
+    """The BSCL network """
+    def __init__(self, model_1:Module, model_2:Module, opt:Dict[str,Union[str,float,int,List]]):
+        """Initialization of the BSCL network
+
+        Args:
+            model_1 (Module): The graph network
+            model_2 (Module): The SMILES network
+            opt (Dict[str,Union[str,float,int,List]]): Parsed arguments
+        """
+        super(BSCL, self).__init__()
         self.model_1 = model_1
         self.model_2 = model_2
 
@@ -219,12 +231,12 @@ class Classifier(torch.nn.Sequential):
             "fusion_layer_3", torch.nn.Linear(in_features=dim_feat * 2, out_features=opt.num_tasks)
         )
 
-    def forward(self, batch:Tensor, opt:Dict, phase:str="train"):
+    def forward(self, batch:Tensor, opt:Dict[str,Union[str,float,int,List]], phase:str="train"):
         """The network of the BSCL.
 
         Args:
             batch1 (Tensor): Input batch
-            opt (Dict): Parsed arguments.
+            opt (Dict[str,Union[str,float,int,List]]): Parsed arguments.
             phase (str, optional): Train phase or validation phase. Defaults to "train".
 
         Returns:
@@ -232,15 +244,15 @@ class Classifier(torch.nn.Sequential):
         """
         if opt.classification and opt.global_feature:
             global_feature = torch.cat(
-                (batch.mgf.view(batch1.y.shape[0], -1), batch.maccs.view(batch1.y.shape[0], -1)),
+                (batch.mgf.view(batch.y.shape[0], -1), batch.maccs.view(batch.y.shape[0], -1)),
                 dim=1,
             ).float()
         elif not opt.classification and opt.global_feature:
             global_feature = F.normalize(
                 torch.cat(
                     (
-                        batch.mgf.view(batch1.y.shape[0], -1),
-                        batch.maccs.view(batch1.y.shape[0], -1),
+                        batch.mgf.view(batch.y.shape[0], -1),
+                        batch.maccs.view(batch.y.shape[0], -1),
                     ),
                     dim=1,
                 ).float(),
@@ -249,8 +261,8 @@ class Classifier(torch.nn.Sequential):
 
         f1_raw = self.model_1(batch)
         f2_raw = self.model_2(
-            batch1.input_ids.view(batch.y.shape[0], -1).int(),
-            batch1.attention_mask.view(batch.y.shape[0], -1).int(),
+            batch.input_ids.view(batch.y.shape[0], -1).int(),
+            batch.attention_mask.view(batch.y.shape[0], -1).int(),
         )
         f1_sp = self.enc1_1(f1_raw)
         f2_sp = self.enc2_1(f2_raw)
@@ -264,15 +276,15 @@ class Classifier(torch.nn.Sequential):
         f1_recon = self.recon_1(f1_sp + f1_co)
         f2_recon = self.recon_2(f2_sp + f2_co)
 
-        h = torch.stack((f1_sp, f2_sp, f1_co, f2_co), dim=0)
-        h = self.transformer_encoder(h)
+        h_out = torch.stack((f1_sp, f2_sp, f1_co, f2_co), dim=0)
+        h_out = self.transformer_encoder(h_out)
 
         if opt.global_feature:
-            h = torch.cat((h[0], h[1], h[2], h[3], global_feature), dim=1)
-            o = self.fusion_global(h)
+            h_out = torch.cat((h_out[0], h_out[1], h_out[2], h_out[3], global_feature), dim=1)
+            output = self.fusion_global(h_out)
         else:
-            h = torch.cat((h[0], h[1], h[2], h[3]), dim=1)
-            o = self.fusion(h)
+            h_out = torch.cat((h_out[0], h_out[1], h_out[2], h_out[3]), dim=1)
+            output = self.fusion(h_out)
 
         if phase == "train":
             return (
@@ -280,7 +292,7 @@ class Classifier(torch.nn.Sequential):
                 f2_cross,
                 f1_recon,
                 f2_recon,
-                o,
+                output,
                 f1_sp,
                 f2_sp,
                 f1_co,
@@ -289,14 +301,14 @@ class Classifier(torch.nn.Sequential):
                 f2_raw,
             )
         else:
-            return o, f1_sp, f2_sp, f1_cross, f2_cross, h
+            return output, f1_sp, f2_sp, f1_cross, f2_cross, h_out
 
 
-def set_model(opt:Dict):
+def set_model(opt:Dict[str,Union[str,float,int,List]]):
     """Initialization of the model and loss functions.
 
     Args:
-        opt (Dict): Parsed arguments.
+        opt (Dict[str,Union[str,float,int,List]]): Parsed arguments.
 
     Returns:
         Return the model and the loss functions. 
@@ -305,7 +317,7 @@ def set_model(opt:Dict):
         num_tasks=opt.num_tasks, mlp_layers=opt.mlp_layers, num_gc_layers=opt.num_gc_layers
     )
     model_2 = SMILESBert()
-    model = Classifier(model_1, model_2, opt)
+    model = BSCL(model_1, model_2, opt)
 
     for name, param in model.named_parameters():
         if "model_2.model.embeddings" in name or "model_2.model.encoder" in name:
@@ -341,26 +353,26 @@ def set_model(opt:Dict):
 
 
 def train(
-    train_dataset:Set,
-    model:Any,
-    criterion_scl:Any,
-    criterion_mse:Any,
-    criterion_task:Any,
-    optimizer:Any,
-    opt:Dict,
+    train_dataset:Set[Data],
+    model:Sequential,
+    criterion_scl:Callable,
+    criterion_mse:Callable,
+    criterion_task:Callable,
+    optimizer:Optimizer,
+    opt:Dict[str,Union[str,float,int,List]],
     mu:int=0,
     std:int=0,
 ):
     """One epoch training.
 
     Args:
-        train_dataset (Set): Train set.
-        model (Any): Model
-        criterion_scl (Any): Supervised contrastive loss function
-        criterion_mse (Any): Reconstruction loss function
-        criterion_task (Any): Task loss function
-        optimizer (Any): Optimizer
-        opt (Dict): Parsed arguments
+        train_dataset (Set[Data]): Train set.
+        model (Sequential): Model
+        criterion_scl (Callable): Supervised contrastive loss function
+        criterion_mse (Callable): Reconstruction loss function
+        criterion_task (Callable): Task loss function
+        optimizer (Optimizer): Optimizer
+        opt (Dict[str,Union[str,float,int,List]]): Parsed arguments
         mu (int, optional): Mean value of the train set for the regression task. Defaults to 0.
         std (int, optional): Standard deviation of the train set for the regression task. Defaults to 0.
 
@@ -451,13 +463,13 @@ def train(
     return losses_task.avg, losses_recon.avg, losses_scl.avg, losses.avg
 
 
-def validation(val_dataset:Set, model:Any, opt:Dict, mu:int=0, std:int=0, save_feature:int=0):
+def validation(val_dataset:Set[Data], model:Sequential, opt:Dict[str,Union[str,float,int,List]], mu:int=0, std:int=0, save_feature:int=0):
     """Validation
 
     Args:
-        val_dataset (Set): Validation set.
-        model (Any): Model
-        opt (Dict): Parsed arguments
+        val_dataset (Set[Data]): Validation set.
+        model (Sequential): Model
+        opt (Dict[str,Union[str,float,int,List]]): Parsed arguments
         mu (int, optional): Mean value of the train set for the regression task. Defaults to 0.
         std (int, optional): Standard deviation of the train set for the regression task. Defaults to 0.
         save_feature (int, optional): Whether save the learned features or not. Defaults to 0.
@@ -536,11 +548,11 @@ def validation(val_dataset:Set, model:Any, opt:Dict, mu:int=0, std:int=0, save_f
         return eval_result
 
 
-def calmean(dataset:Set):
+def calmean(dataset:Set[Data]):
     """Calculate the mean value and the standard deviation value for the regression task. 
 
     Args:
-        dataset (Set): Train set of the regression task. 
+        dataset (Set[Data]): Train set of the regression task. 
 
     Returns:
         The mean value and the standard deviation value of the dataset. 

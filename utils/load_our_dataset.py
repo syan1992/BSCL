@@ -1,10 +1,12 @@
 import os
 from itertools import repeat
+from typing import Callable
 
 import pandas as pd
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from rdkit.Chem import AllChem
+from rdkit.Chem.rdchem import Mol
 import networkx as nx
 import torch
 from ogb.utils.mol import smiles2graph
@@ -14,11 +16,21 @@ from torch_geometric.utils.convert import to_networkx
 from transformers import RobertaTokenizerFast
 
 
-def getmorganfingerprint(mol):
+def getmorganfingerprint(mol:Mol):
+    """get the ECCP fingerprint
+
+    Args:
+        mol (Mol): The molecule
+    """
     return list(AllChem.GetMorganFingerprintAsBitVect(mol, 2))
 
 
-def getmaccsfingerprint(mol):
+def getmaccsfingerprint(mol:Mol):
+    """get the MACCS fingerprint
+
+    Args:
+        mol (Mol): The molecule
+    """
     fp = AllChem.GetMACCSKeysFingerprint(mol)
     return [int(b) for b in fp.ToBitString()]
 
@@ -26,18 +38,20 @@ def getmaccsfingerprint(mol):
 class PygOurDataset(InMemoryDataset):
     def __init__(
         self,
-        root="dataset",
-        phase="train",
-        dataname="hiv",
-        smiles2graph=smiles2graph,
+        root:str="dataset",
+        phase:str="train",
+        dataname:str="hiv",
+        smiles2graph:Callable=smiles2graph,
         transform=None,
         pre_transform=None,
     ):
-        """
-        Pytorch Geometric dataset object
-            - root (str): the dataset folder will be located at root/pcqm4m_kddcup2021
-            - smiles2graph (callable): A callable function that converts a SMILES string into a graph object
-                * The default smiles2graph requires rdkit to be installed
+        """Load our dataset. 
+
+        Args:
+            root (str, optional): The local position of the dataset. Defaults to "dataset".
+            phase (str, optional): The data is train, validation or test set. Defaults to "train".
+            dataname (str, optional): The name of the dataset. Defaults to "hiv".
+            smiles2graph (Callable, optional): Generate the molecular graph from the SMILES string. Defaults to smiles2graph.
         """
 
         self.original_root = root
@@ -125,11 +139,3 @@ class PygOurDataset(InMemoryDataset):
             s[data.__cat_dim__(key, item)] = slice(slices[idx], slices[idx + 1])
             data[key] = item[s]
         return data
-
-
-def draw(Data, i, suffix="raw"):
-    G = to_networkx(Data)
-    plt.figure()
-    nx.draw(G)
-    plt.savefig("path" + str(i) + "_" + suffix + ".png")
-    plt.close()

@@ -7,23 +7,30 @@ class SupConLoss(nn.Module):
     # Weighted Supervised Contrastive Loss for the regression task
     def __init__(
         self,
-        temperature=0.07,
-        contrast_mode="one",
-        base_temperature=0.07,
-        gamma1=2,
-        gamma2=2,
-        threshold=0.5,
+        temperature:float=0.07,
+        base_temperature:float=0.07,
+        gamma1:int=2,
+        gamma2:int=2,
+        threshold:float=0.8,
     ):
+        """Weighted Supervised Contrastive Loss initialization.
+
+        Args:
+            temperature (float, optional): The hyperparameter of the weighted supervised contrastive loss. Defaults to 0.07.
+            base_temperature (float, optional): The hyperparameter of the weighted supervised contrastive loss. Defaults to 0.07.
+            gamma1 (int, optional): The hyperparameter of the weighted supervised contrastive loss. Defaults to 2.
+            gamma2 (int, optional): The hyperparameter of the weighted supervised contrastive loss. Defaults to 2.
+            threshold (float, optional): The hyperparameter of the weighted supervised contrastive loss. Defaults to 0.8.
+        """
         super(SupConLoss, self).__init__()
         self.temperature = temperature
-        self.contrast_mode = contrast_mode
         self.base_temperature = base_temperature
         self.gamma1 = gamma1
         self.gamma2 = gamma2
         self.threshold = threshold
 
     def forward(self, features, labels=None, mask=None):
-        """Compute loss for model. 
+        """Compute the weighted supervised contrastive loss for model. 
         Args:
             features: hidden vector of shape [bsz, n_views, ...].
             labels: ground truth of shape [bsz].

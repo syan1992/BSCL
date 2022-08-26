@@ -1,5 +1,7 @@
 import numpy as np
+
 import torch
+from torch import Tensor
 import torch.nn.functional as F
 from torch.nn import Linear
 from torch_geometric.nn import global_add_pool, global_mean_pool, global_max_pool
@@ -213,8 +215,6 @@ class DeeperGCN(torch.nn.Module):
 
 
 class SupConDeeperGCN(torch.nn.Module):
-    """backbone + projection head"""
-
     def __init__(self, num_tasks:int=1, mlp_layers:int=1, num_gc_layers:int=7):
         """The molecular graph branch. 
 
@@ -256,9 +256,9 @@ class SupConDeeperGCN(torch.nn.Module):
         self.dropout = torch.nn.Dropout(0.5)
 
     def forward(self, batch:Tensor):
-        """
+        """Generate the embedding of the molecular graph branch.
         Args:
-            batch (Tensor)
+            batch (Tensor) : A batch of data of the current epoch. 
 
         Returns:
             The embedding of the molecular graph branch. 

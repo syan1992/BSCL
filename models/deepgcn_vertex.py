@@ -8,6 +8,7 @@ from models.deepgcn_nn import MLP, BondEncoder
 
 
 class GenMessagePassing(MessagePassing):
+    """Aggregation methods from DeeperGCN"""
     def __init__(
         self, aggr="softmax", t=1.0, learn_t=False, p=1.0, learn_p=False, y=0.0, learn_y=False
     ):
@@ -190,9 +191,7 @@ class GENConv(GenMessagePassing):
 
 
 class GINEConv(tg.nn.GINEConv):
-    """
-    GINConv layer (with activation, batch normalization)
-    """
+    """GINConv layer (with activation, batch normalization)"""
 
     def __init__(self, in_channels, out_channels, act="relu", norm=None, bias=True, aggr="add"):
         super(GINEConv, self).__init__(MLP([in_channels, out_channels], act, norm, bias))

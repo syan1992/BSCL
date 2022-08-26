@@ -1,17 +1,19 @@
-import torch
 import numpy as np
+from numpy import array
 from sklearn.metrics import roc_auc_score, average_precision_score
+from typing import Dict
 
+import torch
 
-### Evaluator for graph classification
 class Evaluator:
     def __init__(self, name:str="hiv", num_tasks:int=1, eval_metric:str="rocauc"):
-        """Evaluator
+        """Evaluator for the prediction performance
 
         Args:
             name (str, optional): The name of the dataset. Defaults to "hiv".
             num_tasks (int, optional): Number of tasks in the dataset. Defaults to 1.
             eval_metric (str, optional): Metrics for the evaluation. Defaults to "rocauc".
+                Metrics include : 'rocauc', 'ap', 'rmse', 'mae', 'acc', 'F1'
         """
         self.name = name
         self.num_tasks = num_tasks
@@ -91,13 +93,11 @@ class Evaluator:
         else:
             raise ValueError("Undefined eval metric %s " % (self.eval_metric))
 
-    def eval(self, input_dict:Dict):
-        """_summary_
-
+    def eval(self, input_dict:Dict[array,array]):
+        """Evaluate the performance of the input_dict.
         Args:
-            input_dict (Dict): The true value and the predict value of the dataset.
-                               The format of input_dict is like:
-                               input_dict = {"y_true": y_true, "y_pred": y_pred}
+            input_dict (Dict[array,array]): The true value and the predict value of the dataset.
+                The format of input_dict is like: input_dict = {"y_true": y_true, "y_pred": y_pred}
         Returns:
             A scalar value of the selected metric. 
         """
@@ -191,11 +191,13 @@ class Evaluator:
 
         return desc
 
-    def _eval_rocauc(self, y_true, y_pred):
-        """
-        compute ROC-AUC averaged across tasks
-        """
+    def _eval_rocauc(self, y_true:array, y_pred:array):
+        """compute ROC-AUC averaged across tasks
 
+        Args:
+            y_true (array): The true label of the dataset.
+            y_pred (array): The predict label of the dataset.
+        """
         rocauc_list = []
 
         for i in range(y_true.shape[1]):
@@ -210,9 +212,12 @@ class Evaluator:
 
         return {"rocauc": sum(rocauc_list) / len(rocauc_list)}
 
-    def _eval_ap(self, y_true, y_pred):
-        """
-        compute Average Precision (AP) averaged across tasks
+    def _eval_ap(self, y_true:array, y_pred:array):
+        """compute Average Precision (AP) averaged across tasks
+
+        Args:
+            y_true (array): The true label of the dataset.
+            y_pred (array): The predict label of the dataset.
         """
 
         ap_list = []
@@ -233,9 +238,12 @@ class Evaluator:
 
         return {"ap": sum(ap_list) / len(ap_list)}
 
-    def _eval_rmse(self, y_true, y_pred):
-        """
-        compute RMSE score averaged across tasks
+    def _eval_rmse(self, y_true:array, y_pred:array):
+        """compute RMSE averaged across tasks
+
+        Args:
+            y_true (array): The true label of the dataset.
+            y_pred (array): The predict label of the dataset.
         """
         rmse_list = []
 
@@ -246,7 +254,13 @@ class Evaluator:
 
         return {"rmse": sum(rmse_list) / len(rmse_list)}
 
-    def _eval_mae(self, y_true, y_pred):
+    def _eval_mae(self, y_true:array, y_pred:array):
+        """compute MAE averaged across tasks
+
+        Args:
+            y_true (array): The true label of the dataset.
+            y_pred (array): The predict label of the dataset.
+        """
         from sklearn.metrics import mean_absolute_error
 
         mae_list = []
@@ -256,7 +270,13 @@ class Evaluator:
             mae_list.append(mean_absolute_error(y_true[is_labeled], y_pred[is_labeled]))
         return {"mae": sum(mae_list) / len(mae_list)}
 
-    def _eval_acc(self, y_true, y_pred):
+    def _eval_acc(self, y_true:array, y_pred:array):
+        """compute accuracy averaged across tasks
+
+        Args:
+            y_true (array): The true label of the dataset.
+            y_pred (array): The predict label of the dataset.
+        """
         acc_list = []
 
         for i in range(y_true.shape[1]):
@@ -266,8 +286,13 @@ class Evaluator:
 
         return {"acc": sum(acc_list) / len(acc_list)}
 
-    def _eval_F1(self, seq_ref, seq_pred):
-        #  compute F1 score averaged over samples
+    def _eval_F1(self, seq_ref:array, seq_pred:array):
+        """compute F1 score averaged across tasks
+
+        Args:
+            seq_ref (array): The true label of the dataset.
+            seq_pred (array): The predict label of the dataset.
+        """
 
         precision_list = []
         recall_list = []

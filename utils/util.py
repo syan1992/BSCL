@@ -4,6 +4,7 @@ from typing import Dict
 
 import torch
 import torch.optim as optim
+from torch.optim import Optimizer
 
 
 class AverageMeter(object):
@@ -25,12 +26,12 @@ class AverageMeter(object):
         self.avg = self.sum / self.count
 
 
-def adjust_learning_rate(args:Dict, optimizer:Any, epoch:int, lr:float):
+def adjust_learning_rate(args:Dict, optimizer:Optimizer, epoch:int, lr:float):
     """Learning rate adjustment methods
 
     Args:
         args (Dict): Parsed arguments
-        optimizer (Any): optimizer
+        optimizer (Optimizer): optimizer
         epoch (int): Current epoch
         lr (float): the value of the learning rate
     """
@@ -47,30 +48,30 @@ def adjust_learning_rate(args:Dict, optimizer:Any, epoch:int, lr:float):
         param_group["lr"] = lr
 
 
-def warmup_learning_rate(args:Dict, epoch:int, batch_id:int, total_batches:int, optimizer:Any):
+def warmup_learning_rate(opt:Dict[str,Union[str,float,int,List]], epoch:int, batch_id:int, total_batches:int, optimizer:Optimizer):
     """Learning rate warmup method
 
     Args:
-        args (Dict): Parse arguments
+        opt (Dict[str,Union[str,float,int,List]]): Parse arguments
         epoch (int): Current epoch
         batch_id (int): The number of the current batch.
         total_batches (int): The number of total batch. 
-        optimizer (Any): optimizer
+        optimizer (Optimizer): optimizer
     """
-    if args.warm and epoch <= args.warm_epochs:
+    if opt.warm and epoch <= opt.warm_epochs:
         p = (batch_id + (epoch - 1) * total_batches) / \
-            (args.warm_epochs * total_batches)
-        lr = args.warmup_from + p * (args.warmup_to - args.warmup_from)
+            (opt.warm_epochs * total_batches)
+        lr = opt.warmup_from + p * (opt.warmup_to - opt.warmup_from)
 
         for param_group in optimizer.param_groups:
             param_group["lr"] = lr
 
 
-def set_optimizer(opt, model:Any):
+def set_optimizer(opt:Dict[str,Union[str,float,int,List]], model:Any):
     """Initialize the optimizer.
 
     Args:
-        opt (_type_): Parsed arguments. 
+        opt (Dict[str,Union[str,float,int,List]]): Parsed arguments. 
     """
 
     optimizer = optim.Adam(
@@ -79,7 +80,7 @@ def set_optimizer(opt, model:Any):
     return optimizer
 
 
-def save_model(model:Any, optimizer:Any, opt:Dict, epoch:int, save_file:str):
+def save_model(model:Any, optimizer:Optimizer, opt:Dict[str,Union[str,float,int,List]], epoch:int, save_file:str):
     """Save the model
 
     Args:
