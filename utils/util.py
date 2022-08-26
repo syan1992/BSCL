@@ -1,11 +1,11 @@
 import math
 import numpy as np
-from typing import Dict
+from typing import Dict, Union, List
 
 import torch
 import torch.optim as optim
 from torch.optim import Optimizer
-
+from torch.nn import Sequential
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
@@ -67,7 +67,7 @@ def warmup_learning_rate(opt:Dict[str,Union[str,float,int,List]], epoch:int, bat
             param_group["lr"] = lr
 
 
-def set_optimizer(opt:Dict[str,Union[str,float,int,List]], model:Any):
+def set_optimizer(opt:Dict[str,Union[str,float,int,List]], model:Sequential):
     """Initialize the optimizer.
 
     Args:
@@ -80,7 +80,7 @@ def set_optimizer(opt:Dict[str,Union[str,float,int,List]], model:Any):
     return optimizer
 
 
-def save_model(model:Any, optimizer:Optimizer, opt:Dict[str,Union[str,float,int,List]], epoch:int, save_file:str):
+def save_model(model:Sequential, optimizer:Optimizer, opt:Dict[str,Union[str,float,int,List]], epoch:int, save_file:str):
     """Save the model
 
     Args:

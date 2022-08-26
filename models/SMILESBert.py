@@ -5,6 +5,7 @@ from transformers import RobertaConfig, RobertaModel
 
 class SMILESBert(nn.Module):
     """SMILES branch"""
+
     def __init__(self):
         super(SMILESBert, self).__init__()
         self.bertConfig = RobertaConfig.from_pretrained(
@@ -16,7 +17,7 @@ class SMILESBert(nn.Module):
         self.dense = nn.Linear(self.bertConfig.hidden_size, 128)
         self.dropout = nn.Dropout(0.5)
 
-    def forward(self, ids:Tensor, mask:Tensor):
+    def forward(self, ids: Tensor, mask: Tensor):
         """Generate the embedding of the SMILES branch. 
 
         Args:

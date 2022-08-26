@@ -3,7 +3,7 @@ import time
 import math
 import argparse
 from copy import deepcopy
-from typing import Dict, Set, Union, List
+from typing import Dict, Set, Union, List,Callable
 
 import numpy as np
 from tqdm import tqdm
