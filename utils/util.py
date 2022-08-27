@@ -82,6 +82,21 @@ def set_optimizer(opt: Dict[str, Union[str, float, int, List]], model: nn.Sequen
 
     return optimizer
 
+def calmean(dataset: Set[Data]):
+    """Calculate the mean value and the standard deviation value for a regression task.
+
+    Args:
+        dataset (Set[Data]): Train set of the regression task.
+
+    Returns:
+        The mean value and the standard deviation value of the dataset.
+    """
+    labels = []
+    for i in range(len(dataset)):
+        labels.append(dataset[i].y)
+
+    return torch.mean(torch.Tensor(labels)).to("cuda"), torch.std(torch.Tensor(labels)).to("cuda")
+
 
 def save_model(
     model: nn.Sequential,
