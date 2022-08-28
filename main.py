@@ -22,11 +22,6 @@ from utils.evaluate import Evaluator
 from utils.load_dataset import PygOurDataset
 from utils.util import AverageMeter, adjust_learning_rate, set_optimizer, save_model, calmean
 
-try:
-    import apex
-except ImportError:
-    pass
-
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 
@@ -101,18 +96,20 @@ def parse_option():
         opt.lr_decay_epochs.append(int(it))
 
     if opt.classification:
-        opt.model_name = "SupCon_{}_lr_{}_bsz_{}_trial_{}_mlp_{}_decay_{}_rate_{}".format(
+        opt.model_name = "SupCon_{}_lr_{}_bsz_{}_trial_{}_mlp_{}_wscl_{}_wrecon_{}_decay_{}_rate_{}".format(
             opt.model,
             opt.learning_rate,
             opt.weight_decay,
             opt.batch_size,
             opt.trial,
             opt.mlp_layers,
+            opt.wscl,
+            opt.wrecon, 
             opt.lr_decay_epochs,
             opt.lr_decay_rate,
         )
     else:
-        opt.model_name = "SupCon_{}_lr_{}_bsz_{}_trial_{}_gamma1_{}_gamma2_{}_mlp_{}_decay_{}_rate_{}".format(
+        opt.model_name = "SupCon_{}_lr_{}_bsz_{}_trial_{}_gamma1_{}_gamma2_{}_mlp_{}_wscl_{}_wrecon_{}_decay_{}_rate_{}".format(
             opt.model,
             opt.learning_rate,
             opt.weight_decay,
@@ -121,6 +118,8 @@ def parse_option():
             opt.gamma1,
             opt.gamma2,
             opt.mlp_layers,
+            opt.wscl,
+            opt.wrecon,
             opt.lr_decay_epochs,
             opt.lr_decay_rate,
         )
@@ -376,10 +375,6 @@ def set_model(opt: Any):
         criterion_task = torch.nn.MSELoss()
     criterion_mse = torch.nn.MSELoss()
 
-    # enable synchronized Batch Normalization
-    if opt.syncBN:
-        model = apex.parallel.convert_syncbn_model(model)
-
     if torch.cuda.is_available():
         model = model.cuda()
         criterion_scl = criterion_scl.cuda()
@@ -445,7 +440,7 @@ def train(
             f2_cross,
             f1_recon,
             f2_recon,
-            o,
+            output,
             _,
             _,
             _,
@@ -465,7 +460,7 @@ def train(
         for i in range(labels.shape[1]):
             is_labeled = batch.y[:, i] == batch.y[:, i]
             loss_task = criterion_task(
-                o[is_labeled, i].squeeze(), labels[is_labeled, i].squeeze())
+                output[is_labeled, i].squeeze(), labels[is_labeled, i].squeeze())
             loss_scl = criterion_scl(
                 features_cross[is_labeled], labels[is_labeled, i])
 

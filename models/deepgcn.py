@@ -10,9 +10,9 @@ from models.deepgcn_nn import AtomEncoder, BondEncoder, MLP, norm_layer
 
 
 class DeeperGCN(torch.nn.Module):
+    #DeeperGCN network.
     def __init__(
         self,
-        dim,
         num_gc_layers,
         dropout,
         block,
@@ -55,7 +55,6 @@ class DeeperGCN(torch.nn.Module):
         self.msg_norm = False
         learn_msg_scale = False
 
-        norm = "batch"
         mlp_layers = mlp_layers
         graph_pooling = "sum"
 
@@ -104,7 +103,6 @@ class DeeperGCN(torch.nn.Module):
             )
             self.gcns.append(conv)
             self.norms.append(norm_layer(norm, hidden_channels))
-            # self.norms.append(torch.nn.BatchNorm1d(hidden_channels, affine=True))
 
         self.atom_encoder = AtomEncoder(emb_dim=hidden_channels)
 
@@ -236,7 +234,6 @@ class SupConDeeperGCN(torch.nn.Module):
         t = 0.1
         mlp_layers = mlp_layers
         self.encoder = DeeperGCN(
-            dim,
             num_gc_layers,
             dropout,
             block,

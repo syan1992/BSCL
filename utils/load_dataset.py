@@ -70,22 +70,16 @@ class PygOurDataset(InMemoryDataset):
 
     @property
     def raw_file_names(self):
+        """Return the name of the raw file."""
         return self.phase + "_" + self.dataname + ".csv"
 
     @property
     def processed_file_names(self):
+        """Return the name of the processed file. """
         return self.phase + "_" + self.dataname + ".pt"
 
-    def download(self):
-        if decide_download(self.url):
-            path = download_url(self.url, self.original_root)
-            extract_zip(path, self.original_root)
-            os.unlink(path)
-        else:
-            print("Stop download.")
-            exit(-1)
-
     def process(self):
+        """Generate the processed file from the raw file. Only execute when the data is loaded firstly."""
         data_df = pd.read_csv(
             os.path.join(self.raw_dir, self.phase + "_" + self.dataname + ".csv")
         )
@@ -130,7 +124,11 @@ class PygOurDataset(InMemoryDataset):
         print("Saving...")
         torch.save((data, slices), self.processed_paths[0])
 
-    def get(self, idx):
+    def get(self, idx:int):
+        """Get the idx-th data. 
+        Args:
+            idx (int): The number of the data. 
+        """
         data = Data()
         for key in self.data.keys:
             item, slices = self.data[key], self.slices[key]

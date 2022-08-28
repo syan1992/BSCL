@@ -1,6 +1,6 @@
 import math
 import numpy as np
-from typing import Dict, Union, List
+from typing import Dict, Union, List, Set
 
 import torch
 import torch.optim as optim
@@ -37,7 +37,8 @@ def adjust_learning_rate(args: Dict, optimizer: optim.Optimizer, epoch: int, lr:
     """
     if args.cosine:
         eta_min = lr * (args.lr_decay_rate**3)
-        lr = eta_min + (lr - eta_min) * (1 + math.cos(math.pi * epoch / args.epochs)) / 2
+        lr = eta_min + (lr - eta_min) * \
+            (1 + math.cos(math.pi * epoch / args.epochs)) / 2
     else:
         steps = np.sum(epoch > np.asarray(args.lr_decay_epochs))
         if steps > 0:
@@ -64,7 +65,8 @@ def warmup_learning_rate(
         optimizer (Optimizer): Optimizer.
     """
     if opt.warm and epoch <= opt.warm_epochs:
-        p = (batch_id + (epoch - 1) * total_batches) / (opt.warm_epochs * total_batches)
+        p = (batch_id + (epoch - 1) * total_batches) / \
+            (opt.warm_epochs * total_batches)
         lr = opt.warmup_from + p * (opt.warmup_to - opt.warmup_from)
 
         for param_group in optimizer.param_groups:
@@ -78,9 +80,11 @@ def set_optimizer(opt: Dict[str, Union[str, float, int, List]], model: nn.Sequen
         opt (Dict[str,Union[str,float,int,List]]): Parsed arguments.
     """
 
-    optimizer = optim.Adam(model.parameters(), lr=opt.learning_rate, weight_decay=opt.weight_decay)
+    optimizer = optim.Adam(
+        model.parameters(), lr=opt.learning_rate, weight_decay=opt.weight_decay)
 
     return optimizer
+
 
 def calmean(dataset: Set[Data]):
     """Calculate the mean value and the standard deviation value for a regression task.

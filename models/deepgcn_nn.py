@@ -1,5 +1,6 @@
 from torch import nn
 from torch.nn import Sequential as Seq, Linear as Lin
+import torch
 
 allowable_features = {
     "possible_atomic_num_list": list(range(1, 119)) + ["misc"],
@@ -111,7 +112,7 @@ def norm_layer(norm_type: str, nc: int):
 class MLP(Seq):
     """Multi-layer perceptron."""
 
-    def __init__(self, channels, act="relu", norm=None, bias=True, drop=0.0, last_lin=False):
+    def __init__(self, channels:int, act:str="relu", norm:str=None, bias:bool=True, drop:float=0.0, last_lin:bool=False):
         m = []
 
         for i in range(1, len(channels)):
@@ -135,7 +136,12 @@ class MLP(Seq):
 class AtomEncoder(nn.Module):
     """Encoder of atom."""
 
-    def __init__(self, emb_dim):
+    def __init__(self, emb_dim:int):
+        """
+
+        Args:
+            emb_dim (int): The dimension of the embedding. 
+        """
         super(AtomEncoder, self).__init__()
 
         self.atom_embedding_list = nn.ModuleList()
@@ -146,7 +152,11 @@ class AtomEncoder(nn.Module):
             nn.init.xavier_uniform_(emb.weight.data)
             self.atom_embedding_list.append(emb)
 
-    def forward(self, x):
+    def forward(self, x:Tensor):
+        """
+        Args:
+            x (Tensor): Atom embeddings. 
+        """
         x_embedding = 0
         for i in range(x.shape[1]):
             x_embedding += self.atom_embedding_list[i](x[:, i])
@@ -157,7 +167,12 @@ class AtomEncoder(nn.Module):
 class BondEncoder(nn.Module):
     """Encoder of bond."""
 
-    def __init__(self, emb_dim):
+    def __init__(self, emb_dim:int):
+        """
+
+        Args:
+            emb_dim (int): Dimension of bond embedding.  
+        """
         super(BondEncoder, self).__init__()
 
         self.bond_embedding_list = nn.ModuleList()
@@ -168,7 +183,12 @@ class BondEncoder(nn.Module):
             nn.init.xavier_uniform_(emb.weight.data)
             self.bond_embedding_list.append(emb)
 
-    def forward(self, edge_attr):
+    def forward(self, edge_attr:Tensor):
+        """
+
+        Args:
+            edge_attr (Tensor): Edge attribute. 
+        """
         bond_embedding = 0
         for i in range(edge_attr.shape[1]):
             bond_embedding += self.bond_embedding_list[i](edge_attr[:, i])

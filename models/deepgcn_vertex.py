@@ -3,6 +3,7 @@ import torch.nn.functional as F
 import torch_geometric as tg
 from torch_geometric.nn import MessagePassing
 from torch_scatter import scatter, scatter_softmax
+from torch_geometric.utils import degree
 
 from models.deepgcn_nn import MLP, BondEncoder
 
@@ -92,6 +93,7 @@ class GenMessagePassing(MessagePassing):
 
 
 class MsgNorm(torch.nn.Module):
+    """The message normalization layer proposed by DeeperGCN. """
     def __init__(self, learn_msg_scale=False):
         super(MsgNorm, self).__init__()
 
