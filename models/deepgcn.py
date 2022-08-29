@@ -1,4 +1,5 @@
 import numpy as np
+from typing import Any
 
 import torch
 from torch import Tensor
@@ -225,27 +226,29 @@ class DeeperGCN(torch.nn.Module):
 
 
 class SupConDeeperGCN(torch.nn.Module):
-    def __init__(self, num_tasks: int = 1, mlp_layers: int = 1, num_gc_layers: int = 7):
+    def __init__(self, opt:Any):
         """The molecular graph branch.
 
         Args:
-            num_tasks (int, optional): Number of tasks in the dataset. Defaults to 1.
-            mlp_layers (int, optional): Number of mlp layers. Defaults to 1.
-            num_gc_layers (int, optional): Depth of the deepergcn model. Defaults to 7.
+            opt (Any): Parsed arguments.
         """
         super(SupConDeeperGCN, self).__init__()
         dim = 256
-        num_gc_layers = num_gc_layers
+        num_gc_layers = opt.num_gc_layers
         dropout = 0.2
         block = "res+"
         conv_encode_edge = False
         add_virtual_node = True
         hidden_channels = 256
-        self.num_tasks = num_tasks
+        self.num_tasks = opt.num_tasks
         aggr = "max"
         learn_t = False
         t = 0.1
-        mlp_layers = mlp_layers
+        mlp_layers = opt.mlp_layers
+        if opt.classification:
+            norm = 'batch'
+        else:
+            norm = 'layer'
         self.encoder = DeeperGCN(
             num_gc_layers,
             dropout,
@@ -258,7 +261,7 @@ class SupConDeeperGCN(torch.nn.Module):
             t=t,
             learn_t=learn_t,
             mlp_layers=mlp_layers,
-            norm="layer",
+            norm=norm,
         )
 
         self.dense = torch.nn.Linear(dim, 128)

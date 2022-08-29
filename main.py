@@ -310,9 +310,14 @@ class BSCL(torch.nn.Sequential):
         h_out = self.transformer_encoder(h_out)
 
         if opt.global_feature:
-            h_out = torch.cat(
-                (h_out[0], h_out[1], h_out[2], h_out[3], global_feature), dim=1)
-            output = self.fusion_global(h_out)
+            if opt.classification:
+                h_out = torch.cat(
+                    (h_out[0], h_out[1], h_out[2], h_out[3], global_feature), dim=1)
+                output = self.fusion_global(h_out)
+            else:
+                h_out = torch.cat((h_out[0], h_out[1], h_out[2], h_out[3]),dim=1)
+                h_out = (h_out-torch.mean(h_out))/torch.std(h_out)
+                output = self.fusion_global(torch.cat((h_out,global_feature),dim=1))
         else:
             h_out = torch.cat((h_out[0], h_out[1], h_out[2], h_out[3]), dim=1)
             output = self.fusion(h_out)
@@ -344,9 +349,7 @@ def set_model(opt: Any):
     Returns:
         Return the model and the loss functions.
     """
-    model_1 = SupConDeeperGCN(
-        num_tasks=opt.num_tasks, mlp_layers=opt.mlp_layers, num_gc_layers=opt.num_gc_layers
-    )
+    model_1 = SupConDeeperGCN(opt)
     model_2 = SMILESBert()
     model = BSCL(model_1, model_2, opt)
 
@@ -417,9 +420,9 @@ def train(
     losses_recon = AverageMeter()
     losses_scl = AverageMeter()
     losses = AverageMeter()
-    train_dataset = train_dataset.shuffle()
+    train_dataset_shuffle = train_dataset.shuffle()
     train_loader = DataLoader(
-        train_dataset, batch_size=opt.batch_size, drop_last=True)
+        train_dataset_shuffle, batch_size=opt.batch_size, drop_last=True)
     end = time.time()
 
     for _, batch in enumerate(tqdm(train_loader, desc="Iteration")):
