@@ -79,7 +79,6 @@ class GenMessagePassing(MessagePassing):
             )
             torch.clamp_(out, min_value, max_value)
             out = torch.pow(out, 1 / self.p)
-            # torch.clamp(out, min_value, max_value)
 
             if self.aggr == "power_sum":
                 self.sigmoid_y = torch.sigmoid(self.y)

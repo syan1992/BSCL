@@ -1,7 +1,7 @@
 if [ $1 == 'freesolv' ]
 then
 	python main.py --lr_decay_epochs 800 --lr_decay_rate 0.5 --learning_rate 0.001 --batch_size 128 --epochs 800 \
-		--trial 'layer_norm' --dataset freesolv --num_tasks 1 --temp 0.07 --gamma1 4 --gamma2 1 --threshold 0.8 --mlp_layers 1 \
+		--trial 1 --dataset freesolv --num_tasks 1 --temp 0.07 --gamma1 4 --gamma2 1 --threshold 0.8 --mlp_layers 1 \
 		--wscl 1 --wrecon 1 --data_dir "datasets" --num_gc_layers 3
 elif [ $1 == 'delaney' ]
 then
@@ -17,7 +17,7 @@ then
 elif [ $1 == 'bace' ]
 then
 	python main.py --lr_decay_epochs 300 --lr_decay_rate 0.5 --learning_rate 0.0001 --batch_size 128 --epochs 300 \
-		        --trial old --dataset bace --num_tasks 1 --temp 0.07 --mlp_layers 1 --classification\
+		        --trial 1 --dataset bace --num_tasks 1 --temp 0.07 --mlp_layers 1 --classification\
 			        --wscl 1 --wrecon 0.1 --data_dir "datasets" --num_gc_layers 7
 elif [ $1 == 'tox21' ]
 then

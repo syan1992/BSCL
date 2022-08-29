@@ -4,14 +4,14 @@ from typing import Any
 import torch
 from torch import Tensor
 import torch.nn.functional as F
-from torch_geometric.nn import global_add_pool, global_mean_pool, global_max_pool
+from torch_geometric.nn import global_add_pool, global_mean_pool, global_max_pool, Set2Set
 
 from models.deepgcn_vertex import GENConv
 from models.deepgcn_nn import AtomEncoder, BondEncoder, MLP, norm_layer
 
 
 class DeeperGCN(torch.nn.Module):
-    #DeeperGCN network.
+    """DeeperGCN network."""
     def __init__(
         self,
         num_gc_layers:int,
@@ -22,6 +22,7 @@ class DeeperGCN(torch.nn.Module):
         hidden_channels:int,
         num_tasks:int,
         aggr:str="add",
+        graph_pooling:str='mean',
         t:float=1.0,
         learn_t:bool=False,
         p:float=1.0,
@@ -32,7 +33,6 @@ class DeeperGCN(torch.nn.Module):
         norm:str="batch",
     ):
         """
-
         Args:
             num_gc_layers (int): Depth of the network. 
             dropout (float): Dropout rate. 
@@ -70,7 +70,6 @@ class DeeperGCN(torch.nn.Module):
         learn_msg_scale = False
 
         mlp_layers = mlp_layers
-        graph_pooling = "sum"
 
         print(
             "The number of layers {}".format(self.num_gc_layers),
@@ -132,7 +131,9 @@ class DeeperGCN(torch.nn.Module):
         else:
             raise Exception("Unknown Pool Type")
 
-    def forward(self, x, edge_index, edge_attr, batch):
+        self.set2set = Set2Set(hidden_channels, processing_steps=3)
+
+    def forward(self, x, edge_index, edge_attr, batch, classification=True):
         h = self.atom_encoder(x)
 
         if self.add_virtual_node:
@@ -194,16 +195,19 @@ class DeeperGCN(torch.nn.Module):
                 h = F.dropout(h, p=self.dropout, training=self.training)
         else:
             raise Exception("Unknown block Type")
-
-        h_graph = self.pool(h, batch)
-        xout = h_graph
+        
+        if classification:
+            h_graph = self.set2set(h, batch)
+            xout = h_graph
+        else:
+            h_graph = self.pool(h, batch)
+            xout = h_graph
 
         return xout
 
     def get_embeddings(self, loader):
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        # device = 'cpu'
         ret = []
         y = []
         with torch.no_grad():
@@ -242,13 +246,16 @@ class SupConDeeperGCN(torch.nn.Module):
         hidden_channels = 256
         self.num_tasks = opt.num_tasks
         aggr = "max"
+        graph_pooling = 'sum'
         learn_t = False
         t = 0.1
         mlp_layers = opt.mlp_layers
+        self.classification = opt.classification
         if opt.classification:
             norm = 'batch'
         else:
             norm = 'layer'
+
         self.encoder = DeeperGCN(
             num_gc_layers,
             dropout,
@@ -258,13 +265,17 @@ class SupConDeeperGCN(torch.nn.Module):
             hidden_channels,
             self.num_tasks,
             aggr,
+            graph_pooling,
             t=t,
             learn_t=learn_t,
             mlp_layers=mlp_layers,
-            norm=norm,
+            norm=norm
         )
-
-        self.dense = torch.nn.Linear(dim, 128)
+        if opt.classification:
+            self.dense = torch.nn.Linear(dim*2, 128)
+        else:
+            self.dense = torch.nn.Linear(dim, 128)
+            
         self.dropout = torch.nn.Dropout(0.5)
 
     def forward(self, batch: Tensor):
@@ -275,7 +286,7 @@ class SupConDeeperGCN(torch.nn.Module):
         Returns:
             The embedding of the molecular graph branch.
         """
-        feat = self.encoder(batch.x, batch.edge_index, batch.edge_attr, batch.batch)
+        feat = self.encoder(batch.x, batch.edge_index, batch.edge_attr, batch.batch, self.classification)
         feat = self.dropout(feat)
         feat = self.dense(feat)
         return feat
