@@ -11,7 +11,7 @@ then
 elif [ $1 == 'lipophilicity' ]
 then
 	python main.py --lr_decay_epochs 800 --lr_decay_rate 0.5 --learning_rate 0.001 --batch_size 128 --epochs 800 \
-		                --trial 1 --dataset lipophilicity --num_tasks 1 --temp 0.07 --gamma1 4 --gamma2 1 --threshold 0.8 --mlp_layers 2 \
+		                --trial 1 --dataset lipo --num_tasks 1 --temp 0.07 --gamma1 4 --gamma2 1 --threshold 0.8 --mlp_layers 2 \
 				                        --wscl 1 --wrecon 1 --data_dir "datasets" --num_gc_layers 3
 
 elif [ $1 == 'bace' ]

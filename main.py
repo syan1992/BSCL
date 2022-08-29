@@ -471,6 +471,9 @@ def train(
                 if torch.sum(labels[is_labeled, i], dim=0) > 0:
                     loss_scl_tmp = loss_scl_tmp + loss_scl
                     total_num = total_num + 1
+            else opt.regression:
+                loss_scl_tmp = loss_scl_tmp + loss_scl
+                total_num = total_num + 1
 
         if total_num == 0:
             continue
