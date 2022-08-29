@@ -1,6 +1,5 @@
-from torch import nn
+from torch import nn, Tensor
 from torch.nn import Sequential as Seq, Linear as Lin
-import torch
 
 allowable_features = {
     "possible_atomic_num_list": list(range(1, 119)) + ["misc"],

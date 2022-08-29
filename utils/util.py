@@ -5,7 +5,7 @@ from typing import Dict, Union, List, Set
 import torch
 import torch.optim as optim
 from torch import nn
-
+from torch_geometric.data import Data
 
 class AverageMeter(object):
     """Computes and stores the average and current value."""

@@ -13,23 +13,36 @@ class DeeperGCN(torch.nn.Module):
     #DeeperGCN network.
     def __init__(
         self,
-        num_gc_layers,
-        dropout,
-        block,
-        conv_encode_edge,
-        add_virtual_node,
-        hidden_channels,
-        num_tasks,
-        aggr="add",
-        t=1.0,
-        learn_t=False,
-        p=1.0,
-        learn_p=False,
-        y=0.0,
-        learn_y=False,
-        mlp_layers=1,
-        norm="batch",
+        num_gc_layers:int,
+        dropout:float,
+        block:str,
+        conv_encode_edge:bool,
+        add_virtual_node:bool,
+        hidden_channels:int,
+        num_tasks:int,
+        aggr:str="add",
+        t:float=1.0,
+        learn_t:bool=False,
+        p:float=1.0,
+        learn_p:bool=False,
+        y:float=0.0,
+        learn_y:bool=False,
+        mlp_layers:int=1,
+        norm:str="batch",
     ):
+        """
+
+        Args:
+            num_gc_layers (int): Depth of the network. 
+            dropout (float): Dropout rate. 
+            block (str): Selection of the block, res, res+ or plain.  
+            add_virtual_node (bool): Whether add virtual node. 
+            hidden_channels (int): Number of hidden channels. 
+            num_tasks (int): Number of tasks. 
+            aggr (str, optional): Selection of aggregation methods. add, sum or max. Defaults to "add".
+            mlp_layers (int, optional): Number of MLP layers. Defaults to 1.
+            norm (str, optional): Selection of the normalization methods. batch or layer. Defaults to "batch".
+        """
         super(DeeperGCN, self).__init__()
 
         self.num_gc_layers = num_gc_layers
@@ -248,7 +261,7 @@ class SupConDeeperGCN(torch.nn.Module):
             norm="layer",
         )
 
-        self.dense = torch.nn.Linear(256, 128)
+        self.dense = torch.nn.Linear(dim, 128)
         self.dropout = torch.nn.Dropout(0.5)
 
     def forward(self, batch: Tensor):

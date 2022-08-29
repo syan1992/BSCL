@@ -99,7 +99,6 @@ def parse_option():
         opt.model_name = "SupCon_{}_lr_{}_bsz_{}_trial_{}_mlp_{}_wscl_{}_wrecon_{}_decay_{}_rate_{}".format(
             opt.model,
             opt.learning_rate,
-            opt.weight_decay,
             opt.batch_size,
             opt.trial,
             opt.mlp_layers,
@@ -112,7 +111,6 @@ def parse_option():
         opt.model_name = "SupCon_{}_lr_{}_bsz_{}_trial_{}_gamma1_{}_gamma2_{}_mlp_{}_wscl_{}_wrecon_{}_decay_{}_rate_{}".format(
             opt.model,
             opt.learning_rate,
-            opt.weight_decay,
             opt.batch_size,
             opt.trial,
             opt.gamma1,
