@@ -467,15 +467,9 @@ def train(
             loss_task_tmp = loss_task_tmp + loss_task
 
             if opt.classification:
-                if torch.sum(labels[is_labeled, i], dim=0) < labels.shape[0]:
-                    wk = torch.sum(labels[is_labeled, i],
-                                   dim=0) / labels.shape[0]
-                    wk = (1 - wk) * (1 - wk)
-                    loss_scl_tmp = loss_scl_tmp + wk * loss_scl
+                if torch.sum(labels[is_labeled, i], dim=0) > 0:
+                    loss_scl_tmp = loss_scl_tmp + loss_scl
                     total_num = total_num + 1
-            else:
-                loss_scl_tmp = loss_scl_tmp + loss_scl
-                total_num = total_num + 1
 
         if total_num == 0:
             continue
