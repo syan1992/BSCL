@@ -559,6 +559,10 @@ def validation(
                 feature_graph_sp.append(f1_sp.detach().cpu())
                 feature.append(h_out.detach().cpu())
 
+            if opt.classification:
+                sigmoid = torch.nn.Sigmoid()
+                output = sigmoid(output)
+
             y_true.append(batch.y.detach().cpu())
             y_pred.append(output.detach().cpu())
 
@@ -578,6 +582,7 @@ def validation(
             eval_result = evaluator.eval(input_dict)["rocauc"]
         else:
             eval_result = evaluator.eval(input_dict)["rmse"]
+            
     if save_feature:
         feature_smiles = np.concatenate(feature_smiles)
         feature_graph = np.concatenate(feature_graph)
