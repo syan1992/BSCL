@@ -104,10 +104,10 @@ class SupConLoss(nn.Module):
         mask = mask
 
         exp_logits = torch.exp(logits) * d_weight * logits_mask
-        log_prob = torch.log(torch.exp(logits * n_weight * mask)) - torch.log(
-            exp_logits.sum(torch.div(exp_logits.sum(1, keepdim=True),
+        log_prob = torch.log(torch.exp(logits*n_weight*mask)) - torch.log(
+            torch.div(exp_logits.sum(1, keepdim=True),
             (logits_mask).sum(1,keepdim=True)))
-        )
+
 
         numerator = (mask * log_prob).sum(1)
         denominator = mask.sum(1)
@@ -158,10 +158,9 @@ class SupConLoss(nn.Module):
 
         # compute log_prob
         exp_logits = torch.exp(logits) * d_weight * logits_mask
-        log_prob = torch.log(torch.exp(logits * n_weight * mask)) - torch.log(
-            exp_logits.sum(torch.div(exp_logits.sum(1, keepdim=True),
+        log_prob = torch.log(torch.exp(logits*n_weight*mask)) - torch.log(
+            torch.div(exp_logits.sum(1, keepdim=True),
             (logits_mask).sum(1,keepdim=True)))
-        )
 
         # compute mean of log-likelihood over positive
         numerator = (mask * log_prob).sum(1)
