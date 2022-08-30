@@ -1,43 +1,56 @@
 import os
 from itertools import repeat
+from typing import Callable
 
 import pandas as pd
 from tqdm import tqdm
-import matplotlib.pyplot as plt
 from rdkit.Chem import AllChem
-import networkx as nx
+from rdkit.Chem.rdchem import Mol
 import torch
 from ogb.utils.mol import smiles2graph
 from ogb.utils.url import decide_download, download_url, extract_zip
 from torch_geometric.data import InMemoryDataset, Data
-from torch_geometric.utils.convert import to_networkx
 from transformers import RobertaTokenizerFast
 
 
-def getmorganfingerprint(mol):
+def getmorganfingerprint(mol: Mol):
+    """Get the ECCP fingerprint.
+
+    Args:
+        mol (Mol): The molecule.
+    """
     return list(AllChem.GetMorganFingerprintAsBitVect(mol, 2))
 
 
-def getmaccsfingerprint(mol):
+def getmaccsfingerprint(mol: Mol):
+    """Get the MACCS fingerprint.
+
+    Args:
+        mol (Mol): The molecule.
+    """
     fp = AllChem.GetMACCSKeysFingerprint(mol)
     return [int(b) for b in fp.ToBitString()]
 
 
 class PygOurDataset(InMemoryDataset):
+    """Load datasets."""
+
     def __init__(
         self,
-        root="dataset",
-        phase="train",
-        dataname="hiv",
-        smiles2graph=smiles2graph,
+        root: str = "dataset",
+        phase: str = "train",
+        dataname: str = "hiv",
+        smiles2graph: Callable = smiles2graph,
         transform=None,
         pre_transform=None,
     ):
         """
-        Pytorch Geometric PCQM4M dataset object
-            - root (str): the dataset folder will be located at root/pcqm4m_kddcup2021
-            - smiles2graph (callable): A callable function that converts a SMILES string into a graph object
-                * The default smiles2graph requires rdkit to be installed
+        Args:
+            root (str, optional): The local position of the dataset. Defaults to "dataset".
+            phase (str, optional): The data is train, validation or test set. Defaults to "train".
+            dataname (str, optional): The name of the dataset. Defaults to "hiv".
+            smiles2graph (Callable, optional): Generate the molecular graph from the SMILES
+                string. Defaults to smiles2graph.
         """
 
         self.original_root = root
@@ -57,22 +70,16 @@ class PygOurDataset(InMemoryDataset):
 
     @property
     def raw_file_names(self):
+        """Return the name of the raw file."""
         return self.phase + "_" + self.dataname + ".csv"
 
     @property
     def processed_file_names(self):
+        """Return the name of the processed file."""
         return self.phase + "_" + self.dataname + ".pt"
 
-    def download(self):
-        if decide_download(self.url):
-            path = download_url(self.url, self.original_root)
-            extract_zip(path, self.original_root)
-            os.unlink(path)
-        else:
-            print("Stop download.")
-            exit(-1)
-
     def process(self):
+        """Generate the processed file from the raw file. Only execute when the data is loaded firstly."""
         data_df = pd.read_csv(
             os.path.join(self.raw_dir, self.phase + "_" + self.dataname + ".csv")
         )
@@ -117,7 +124,11 @@ class PygOurDataset(InMemoryDataset):
         print("Saving...")
         torch.save((data, slices), self.processed_paths[0])
 
-    def get(self, idx):
+    def get(self, idx: int):
+        """Get the idx-th data.
+        Args:
+            idx (int): The number of the data.
+        """
         data = Data()
         for key in self.data.keys:
             item, slices = self.data[key], self.slices[key]
@@ -125,11 +136,3 @@ class PygOurDataset(InMemoryDataset):
             s[data.__cat_dim__(key, item)] = slice(slices[idx], slices[idx + 1])
             data[key] = item[s]
         return data
-
-
-def draw(Data, i, suffix="raw"):
-    G = to_networkx(Data)
-    plt.figure()
-    nx.draw(G)
-    plt.savefig("path" + str(i) + "_" + suffix + ".png")
-    plt.close()

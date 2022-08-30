@@ -3,35 +3,31 @@ import time
 import math
 import argparse
 from copy import deepcopy
+from typing import Set, Callable, Any
 
 import numpy as np
 from tqdm import tqdm
 import torch
+from torch import Tensor
+from torch.nn import Module
 import torch.backends.cudnn as cudnn
 import torch.nn.functional as F
+from torch.optim import Optimizer
+from torch_geometric.data import DataLoader, Data
 import tensorboard_logger as tb_logger
-from torch_geometric.data import DataLoader
 
 from models.deepgcn import SupConDeeperGCN
-from models.SMILESBert import SMILESBert
+from models.smiles_bert import SMILESBert
 from utils.evaluate import Evaluator
-from utils.load_our_dataset import PygOurDataset
-from utils.util import (
-    AverageMeter,
-    adjust_learning_rate,
-    set_optimizer,
-    save_model,
-)
-
-try:
-    import apex
-except ImportError:
-    pass
+from utils.load_dataset import PygOurDataset
+from utils.util import AverageMeter, adjust_learning_rate, set_optimizer, save_model, calmean
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 
 def parse_option():
+    """Parse arguments."""
+
     parser = argparse.ArgumentParser("argument for training")
 
     parser.add_argument("--classification", action="store_true", help="classification task")
@@ -57,7 +53,7 @@ def parse_option():
 
     parser.add_argument("--model", type=str, default="DeeperGCN")
     parser.add_argument("--dataset", type=str, default="freesolv", help="dataset")
-    parser.add_argument("--data_folder", type=str, default=None, help="path to custom dataset")
+    parser.add_argument("--data_dir", type=str, default=None, help="path to custom dataset")
     parser.add_argument("--num_tasks", type=int, default=1, help="parameter for task number")
 
     parser.add_argument("--temp", type=float, default=0.07, help="temperature for loss function")
@@ -84,20 +80,34 @@ def parse_option():
     for it in iterations:
         opt.lr_decay_epochs.append(int(it))
 
-    opt.model_name = "SupCon_{}_{}_lr1_{}_decay_{}_bsz_{}_temp_{}_trial_{}_gamma1_{}_gamma2_{}_mlp_{}_decay_{}_rate_{}".format(
-        opt.dataset,
-        opt.model,
-        opt.learning_rate,
-        opt.weight_decay,
-        opt.batch_size,
-        opt.temp,
-        opt.trial,
-        opt.gamma1,
-        opt.gamma2,
-        opt.mlp_layers,
-        opt.lr_decay_epochs,
-        opt.lr_decay_rate,
-    )
+    if opt.classification:
+        opt.model_name = (
+            "SupCon_{}_lr_{}_bsz_{}_trial_{}_mlp_{}_wscl_{}_wrecon_{}_decay_{}_rate_{}".format(
+                opt.model,
+                opt.learning_rate,
+                opt.batch_size,
+                opt.trial,
+                opt.mlp_layers,
+                opt.wscl,
+                opt.wrecon,
+                opt.lr_decay_epochs,
+                opt.lr_decay_rate,
+            )
+        )
+    else:
+        opt.model_name = "SupCon_{}_lr_{}_bsz_{}_trial_{}_gamma1_{}_gamma2_{}_mlp_{}_wscl_{}_wrecon_{}_decay_{}_rate_{}".format(
+            opt.model,
+            opt.learning_rate,
+            opt.batch_size,
+            opt.trial,
+            opt.gamma1,
+            opt.gamma2,
+            opt.mlp_layers,
+            opt.wscl,
+            opt.wrecon,
+            opt.lr_decay_epochs,
+            opt.lr_decay_rate,
+        )
 
     if opt.cosine:
         opt.model_name = "{}_cosine".format(opt.model_name)
@@ -129,19 +139,36 @@ else:
     from loss.loss_scl_reg import SupConLoss
 
 
-def set_loader(opt, dn):
+def set_loader(opt: Any, dataname: str) -> Set[Data]:
+    """Load dataset from opt.datas_dir.
 
-    rr = opt.data_folder
-    train_dataset = PygOurDataset(root=rr, phase="train", dataname=dn)
-    test_dataset = PygOurDataset(root=rr, phase="test", dataname=dn)
-    val_dataset = PygOurDataset(root=rr, phase="valid", dataname=dn)
+    Args:
+        opt (Any): Parsed arguments.
+        dataname (str): The folder name of the dataset.
+
+    Returns:
+        Set[Data]: train/validation/test sets.
+    """
+
+    train_dataset = PygOurDataset(root=opt.data_dir, phase="train", dataname=dataname)
+    test_dataset = PygOurDataset(root=opt.data_dir, phase="test", dataname=dataname)
+    val_dataset = PygOurDataset(root=opt.data_dir, phase="valid", dataname=dataname)
 
     return train_dataset, test_dataset, val_dataset
 
 
-class Classifier(torch.nn.Sequential):
-    def __init__(self, model_1, model_2, opt):
-        super(Classifier, self).__init__()
+class BSCL(torch.nn.Sequential):
+    """The BSCL network."""
+
+    def __init__(self, model_1: Module, model_2: Module, opt: Any):
+        """Initialization of the BSCL network.
+
+        Args:
+            model_1 (Module): The graph network
+            model_2 (Module): The SMILES network
+            opt (Any): Parsed arguments
+        """
+        super(BSCL, self).__init__()
         self.model_1 = model_1
         self.model_2 = model_2
 
@@ -209,28 +236,38 @@ class Classifier(torch.nn.Sequential):
             "fusion_layer_3", torch.nn.Linear(in_features=dim_feat * 2, out_features=opt.num_tasks)
         )
 
-    def forward(self, batch1, opt, phase="train"):
+    def forward(self, batch: Tensor, opt: Any, phase: str = "train"):
+        """The network of the BSCL.
+
+        Args:
+            batch1 (Tensor): Input batch
+            opt (Any): Parsed arguments.
+            phase (str, optional): Train phase or validation phase. Defaults to "train".
+
+        Returns:
+            Prediction results and representations learend by the model.
+        """
         if opt.classification and opt.global_feature:
             global_feature = torch.cat(
-                (batch1.mgf.view(batch1.y.shape[0], -1), batch1.maccs.view(batch1.y.shape[0], -1)),
+                (batch.mgf.view(batch.y.shape[0], -1), batch.maccs.view(batch.y.shape[0], -1)),
                 dim=1,
             ).float()
         elif not opt.classification and opt.global_feature:
             global_feature = F.normalize(
                 torch.cat(
                     (
-                        batch1.mgf.view(batch1.y.shape[0], -1),
-                        batch1.maccs.view(batch1.y.shape[0], -1),
+                        batch.mgf.view(batch.y.shape[0], -1),
+                        batch.maccs.view(batch.y.shape[0], -1),
                     ),
                     dim=1,
                 ).float(),
                 dim=1,
             )
 
-        f1_raw = self.model_1(batch1)
+        f1_raw = self.model_1(batch)
         f2_raw = self.model_2(
-            batch1.input_ids.view(batch1.y.shape[0], -1).int(),
-            batch1.attention_mask.view(batch1.y.shape[0], -1).int(),
+            batch.input_ids.view(batch.y.shape[0], -1).int(),
+            batch.attention_mask.view(batch.y.shape[0], -1).int(),
         )
         f1_sp = self.enc1_1(f1_raw)
         f2_sp = self.enc2_1(f2_raw)
@@ -244,15 +281,20 @@ class Classifier(torch.nn.Sequential):
         f1_recon = self.recon_1(f1_sp + f1_co)
         f2_recon = self.recon_2(f2_sp + f2_co)
 
-        h = torch.stack((f1_sp, f2_sp, f1_co, f2_co), dim=0)
-        h = self.transformer_encoder(h)
+        h_out = torch.stack((f1_sp, f2_sp, f1_co, f2_co), dim=0)
+        h_out = self.transformer_encoder(h_out)
 
         if opt.global_feature:
-            h = torch.cat((h[0], h[1], h[2], h[3], global_feature), dim=1)
-            o = self.fusion_global(h)
+            if opt.classification:
+                h_out = torch.cat((h_out[0], h_out[1], h_out[2], h_out[3], global_feature), dim=1)
+                output = self.fusion_global(h_out)
+            else:
+                h_out = torch.cat((h_out[0], h_out[1], h_out[2], h_out[3]), dim=1)
+                h_out = (h_out - torch.mean(h_out)) / torch.std(h_out)
+                output = self.fusion_global(torch.cat((h_out, global_feature), dim=1))
         else:
-            h = torch.cat((h[0], h[1], h[2], h[3]), dim=1)
-            o = self.fusion(h)
+            h_out = torch.cat((h_out[0], h_out[1], h_out[2], h_out[3]), dim=1)
+            output = self.fusion(h_out)
 
         if phase == "train":
             return (
@@ -260,7 +302,7 @@ class Classifier(torch.nn.Sequential):
                 f2_cross,
                 f1_recon,
                 f2_recon,
-                o,
+                output,
                 f1_sp,
                 f2_sp,
                 f1_co,
@@ -269,15 +311,21 @@ class Classifier(torch.nn.Sequential):
                 f2_raw,
             )
         else:
-            return o, f1_sp, f2_sp, f1_cross, f2_cross, h
+            return output, f1_sp, f2_sp, f1_cross, f2_cross, h_out
 
 
-def set_model(opt):
-    model_1 = SupConDeeperGCN(
-        num_tasks=opt.num_tasks, mlp_layers=opt.mlp_layers, num_gc_layers=opt.num_gc_layers
-    )
+def set_model(opt: Any):
+    """Initialization of the model and loss functions.
+
+    Args:
+        opt (Any): Parsed arguments.
+
+    Returns:
+        Return the model and the loss functions.
+    """
+    model_1 = SupConDeeperGCN(opt)
     model_2 = SMILESBert()
-    model = Classifier(model_1, model_2, opt)
+    model = BSCL(model_1, model_2, opt)
 
     for name, param in model.named_parameters():
         if "model_2.model.embeddings" in name or "model_2.model.encoder" in name:
@@ -301,10 +349,6 @@ def set_model(opt):
         criterion_task = torch.nn.MSELoss()
     criterion_mse = torch.nn.MSELoss()
 
-    # enable synchronized Batch Normalization
-    if opt.syncBN:
-        model = apex.parallel.convert_syncbn_model(model)
-
     if torch.cuda.is_available():
         model = model.cuda()
         criterion_scl = criterion_scl.cuda()
@@ -313,17 +357,33 @@ def set_model(opt):
 
 
 def train(
-    train_dataset,
-    model,
-    criterion_scl,
-    criterion_mse,
-    criterion_task,
-    optimizer,
-    opt,
-    mu=0,
-    std=0,
+    train_dataset: Set[Data],
+    model: torch.nn.Sequential,
+    criterion_scl: Callable,
+    criterion_mse: Callable,
+    criterion_task: Callable,
+    optimizer: Optimizer,
+    opt: Any,
+    mu: int = 0,
+    std: int = 0,
 ):
-    """one epoch training"""
+    """One epoch training.
+
+    Args:
+        train_dataset (Set[Data]): Train set.
+        model (torch.nn.Sequential): Model
+        criterion_scl (Callable): Supervised contrastive loss function
+        criterion_mse (Callable): Reconstruction loss function
+        criterion_task (Callable): Task loss function
+        optimizer (Optimizer): Optimizer
+        opt (Any): Parsed arguments
+        mu (int, optional): Mean value of the train set for the regression task. Defaults to 0.
+        std (int, optional): Standard deviation of the train set for the regression task.
+            Defaults to 0.
+
+    Returns:
+        Losses.
+    """
     model.train()
 
     batch_time = AverageMeter()
@@ -333,8 +393,8 @@ def train(
     losses_recon = AverageMeter()
     losses_scl = AverageMeter()
     losses = AverageMeter()
-    train_dataset = train_dataset.shuffle()
-    train_loader = DataLoader(train_dataset, batch_size=opt.batch_size, drop_last=True)
+    train_dataset_shuffle = train_dataset.shuffle()
+    train_loader = DataLoader(train_dataset_shuffle, batch_size=opt.batch_size, drop_last=True)
     end = time.time()
 
     for _, batch in enumerate(tqdm(train_loader, desc="Iteration")):
@@ -353,7 +413,7 @@ def train(
             f2_cross,
             f1_recon,
             f2_recon,
-            o,
+            output,
             _,
             _,
             _,
@@ -370,16 +430,16 @@ def train(
         loss_recon = (criterion_mse(f1_recon, f1_raw) + criterion_mse(f2_recon, f2_raw)) / 2.0
         for i in range(labels.shape[1]):
             is_labeled = batch.y[:, i] == batch.y[:, i]
-            loss_task = criterion_task(o[is_labeled, i].squeeze(), labels[is_labeled, i].squeeze())
+            loss_task = criterion_task(
+                output[is_labeled, i].squeeze(), labels[is_labeled, i].squeeze()
+            )
             loss_scl = criterion_scl(features_cross[is_labeled], labels[is_labeled, i])
 
             loss_task_tmp = loss_task_tmp + loss_task
 
             if opt.classification:
-                if torch.sum(labels[is_labeled, i], dim=0) < labels.shape[0]:
-                    wk = torch.sum(labels[is_labeled, i], dim=0) / labels.shape[0]
-                    wk = (1 - wk) * (1 - wk)
-                    loss_scl_tmp = loss_scl_tmp + wk * loss_scl
+                if torch.sum(labels[is_labeled, i], dim=0) > 0:
+                    loss_scl_tmp = loss_scl_tmp + loss_scl
                     total_num = total_num + 1
             else:
                 loss_scl_tmp = loss_scl_tmp + loss_scl
@@ -408,15 +468,38 @@ def train(
     return losses_task.avg, losses_recon.avg, losses_scl.avg, losses.avg
 
 
-def validation(val_dataset, model, opt, mu=0, std=0, save_feature=0):
+def validation(
+    dataset: Set[Data],
+    model: torch.nn.Sequential,
+    opt: Any,
+    mu: int = 0,
+    std: int = 0,
+    save_feature: int = 0,
+):
+    """Calculate performance metrics.
+
+    Args:
+        dataset (Set[Data]): A dataset.
+        model (torch.nn.Sequential): Model.
+        opt (Any): Parsed arguments.
+        mu (int, optional): Mean value of the train set for the regression task.
+            Defaults to 0.
+        std (int, optional): Standard deviation of the train set for the regression task.
+            Defaults to 0.
+        save_feature (int, optional): Whether save the learned features or not.
+            Defaults to 0.
+
+    Returns:
+        auroc or rmse value.
+    """
     model.eval()
 
     if opt.classification:
         evaluator = Evaluator(name=opt.dataset, num_tasks=opt.num_tasks, eval_metric="rocauc")
     else:
         evaluator = Evaluator(name=opt.dataset, num_tasks=opt.num_tasks, eval_metric="rmse")
-    val_loader = DataLoader(
-        val_dataset, batch_size=opt.batch_size, shuffle=False, num_workers=opt.num_workers
+    data_loader = DataLoader(
+        dataset, batch_size=opt.batch_size, shuffle=False, num_workers=opt.num_workers
     )
 
     with torch.no_grad():
@@ -428,21 +511,25 @@ def validation(val_dataset, model, opt, mu=0, std=0, save_feature=0):
             feature_smiles_sp = []
             feature_graph_sp = []
             feature = []
-        for _, batch in enumerate(tqdm(val_loader, desc="Iteration")):
+        for _, batch in enumerate(tqdm(data_loader, desc="Iteration")):
             batch = batch.to("cuda")
-            o, f1_sp, f2_sp, f1_co, f2_co, h = model(batch, opt, "valid")
+            output, f1_sp, f2_sp, f1_co, f2_co, h_out = model(batch, opt, "valid")
 
             if not opt.classification:
-                o = o * std + mu
+                output = output * std + mu
             if save_feature:
                 feature_smiles.append(f2_co.detach().cpu())
                 feature_graph.append(f1_co.detach().cpu())
                 feature_smiles_sp.append(f2_sp.detach().cpu())
                 feature_graph_sp.append(f1_sp.detach().cpu())
-                feature.append(h.detach().cpu())
+                feature.append(h_out.detach().cpu())
+
+            if opt.classification:
+                sigmoid = torch.nn.Sigmoid()
+                output = sigmoid(output)
 
             y_true.append(batch.y.detach().cpu())
-            y_pred.append(o.detach().cpu())
+            y_pred.append(output.detach().cpu())
 
         y_true = torch.cat(y_true, dim=0).squeeze().unsqueeze(1).numpy()
         if opt.num_tasks > 1:
@@ -456,9 +543,10 @@ def validation(val_dataset, model, opt, mu=0, std=0, save_feature=0):
             }
 
         if opt.classification:
-            auroc = evaluator.eval(input_dict)["rocauc"]
+            eval_result = evaluator.eval(input_dict)["rocauc"]
         else:
-            auroc = evaluator.eval(input_dict)["rmse"]
+            eval_result = evaluator.eval(input_dict)["rmse"]
+
     if save_feature:
         feature_smiles = np.concatenate(feature_smiles)
         feature_graph = np.concatenate(feature_graph)
@@ -467,7 +555,7 @@ def validation(val_dataset, model, opt, mu=0, std=0, save_feature=0):
         feature = np.concatenate(feature)
 
         return (
-            auroc,
+            eval_result,
             feature_smiles,
             feature_graph,
             y_true,
@@ -477,23 +565,15 @@ def validation(val_dataset, model, opt, mu=0, std=0, save_feature=0):
             feature,
         )
     else:
-        return auroc
-
-
-def calmean(dataset):
-    yy = []
-    for i in range(len(dataset)):
-        yy.append(dataset[i].y)
-
-    return torch.mean(torch.Tensor(yy)).to("cuda"), torch.std(torch.Tensor(yy)).to("cuda")
+        return eval_result
 
 
 def main():
 
-    for dn in [opt.dataset + "_1", opt.dataset + "_2", opt.dataset + "_3"]:
+    for dataname in [opt.dataset + "_1", opt.dataset + "_2", opt.dataset + "_3"]:
 
         # build data loader
-        train_dataset, test_dataset, val_dataset = set_loader(opt, dn)
+        train_dataset, test_dataset, val_dataset = set_loader(opt, dataname)
 
         if opt.classification:
             mu, std = 0, 0
@@ -505,11 +585,15 @@ def main():
 
         # build optimizer
         optimizer = set_optimizer(opt, model)
-        opt.tb_folder = os.path.join(opt.tb_path, opt.model_name)
+
+        model_name = "{}_{}".format(opt.model_name, dataname)
+
+        # save folder
+        opt.tb_folder = os.path.join(opt.tb_path, model_name)
         if not os.path.isdir(opt.tb_folder):
             os.makedirs(opt.tb_folder)
 
-        opt.save_folder = os.path.join(opt.model_path, opt.model_name)
+        opt.save_folder = os.path.join(opt.model_path, model_name)
         if not os.path.isdir(opt.save_folder):
             os.makedirs(opt.save_folder)
         # tensorboard

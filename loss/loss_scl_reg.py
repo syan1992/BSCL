@@ -1,5 +1,8 @@
+from typing import Optional
+
 import torch
 import torch.nn as nn
+from torch import Tensor
 
 
 class SupConLoss(nn.Module):
@@ -7,39 +10,52 @@ class SupConLoss(nn.Module):
     # Weighted Supervised Contrastive Loss for the regression task
     def __init__(
         self,
-        temperature=0.07,
-        contrast_mode="one",
-        base_temperature=0.07,
-        gamma1=2,
-        gamma2=2,
-        threshold=0.5,
+        temperature: float = 0.07,
+        base_temperature: float = 0.07,
+        gamma1: int = 2,
+        gamma2: int = 2,
+        threshold: float = 0.8,
     ):
+        """Weighted Supervised Contrastive Loss initialization.
+
+        Args:
+            temperature (float, optional): The hyperparameter of the weighted supervised
+                contrastive loss. Defaults to 0.07.
+            base_temperature (float, optional): The hyperparameter of the weighted supervised
+                contrastive loss. Defaults to 0.07.
+            gamma1 (int, optional): The hyperparameter of the weighted supervised contrastive
+                loss. Defaults to 2.
+            gamma2 (int, optional): The hyperparameter of the weighted supervised contrastive
+                loss. Defaults to 2.
+            threshold (float, optional): The hyperparameter of the weighted supervised
+                contrastive loss. Defaults to 0.8.
+        """
         super(SupConLoss, self).__init__()
         self.temperature = temperature
-        self.contrast_mode = contrast_mode
         self.base_temperature = base_temperature
         self.gamma1 = gamma1
         self.gamma2 = gamma2
         self.threshold = threshold
 
-    def forward(self, features, labels=None, mask=None):
-        """Compute loss for model. 
+    def forward(
+        self, features: Tensor, labels: Optional[Tensor] = None, mask: Optional[Tensor] = None
+    ):
+        """Compute the supervised contrastive loss for model.
+
         Args:
-            features: hidden vector of shape [bsz, n_views, ...].
-            labels: ground truth of shape [bsz].
-            mask: contrastive mask of shape [bsz, bsz], mask_{i,j}=1 if sample j
-                has the same class as sample i. Can be asymmetric.
+            features (Tensor): hidden vector of shape [bsz, n_views, ...].
+            labels (Optional[Tensor], optional): ground truth of shape [bsz].
+            mask (Optional[Tensor], optional): contrastive mask of
+                shape [bsz, bsz], mask_{i,j}=1 if sample j has the same
+                class as sample i. Can be asymmetric.
         Returns:
             A loss scalar.
         """
-        device = torch.device(
-            "cuda") if features.is_cuda else torch.device("cpu")
+        device = torch.device("cuda") if features.is_cuda else torch.device("cpu")
 
         contrast_count = 1
         contrast_feature_smiles = features[:, 1, :]
         contrast_feature_graph = features[:, 0, :]
-
-        mask_init = mask
 
         ############################anchor graph###############################
         anchor_feature = contrast_feature_graph
@@ -54,8 +70,7 @@ class SupConLoss(nn.Module):
         mask = torch.eq(labels, labels.T).float().to(device)
 
         anchor_dot_contrast = torch.div(
-            torch.matmul(anchor_feature,
-                         contrast_feature_smiles.T), self.temperature
+            torch.matmul(anchor_feature, contrast_feature_smiles.T), self.temperature
         )
         # for numerical stability
         logits_max, _ = torch.max(anchor_dot_contrast, dim=1, keepdim=True)
@@ -65,8 +80,7 @@ class SupConLoss(nn.Module):
             (torch.pow(labels.repeat(1, batch_size) - labels.repeat(1, batch_size).T, 2))
         )
         dynamic_t = torch.quantile(weight, 0.5, dim=1)
-        dynamic_t = torch.where(
-            dynamic_t > self.threshold, self.threshold, dynamic_t.double())
+        dynamic_t = torch.where(dynamic_t > self.threshold, self.threshold, dynamic_t.double())
         mask = torch.le(weight, dynamic_t.repeat([batch_size, 1]).T).int()
 
         gamma1 = self.gamma1
@@ -75,8 +89,8 @@ class SupConLoss(nn.Module):
         n_weight = -weight / dynamic_t
         n_weight = 1 + torch.exp(n_weight * gamma1)
         d_weight = (
-            (weight - dynamic_t.repeat([batch_size, 1]).T).T /
-            (torch.max(weight, dim=1)[0] - dynamic_t)
+            (weight - dynamic_t.repeat([batch_size, 1]).T).T
+            / (torch.max(weight, dim=1)[0] - dynamic_t)
         ).T + gamma2
         d_weight = torch.exp(d_weight)
 
@@ -91,7 +105,7 @@ class SupConLoss(nn.Module):
 
         exp_logits = torch.exp(logits) * d_weight * logits_mask
         log_prob = torch.log(torch.exp(logits * n_weight * mask)) - torch.log(
-            exp_logits.sum(1, keepdim=True)
+            torch.div(exp_logits.sum(1, keepdim=True), (logits_mask).sum(1, keepdim=True))
         )
 
         numerator = (mask * log_prob).sum(1)
@@ -113,8 +127,7 @@ class SupConLoss(nn.Module):
         mask = torch.eq(labels, labels.T).float().to(device)
 
         anchor_dot_contrast = torch.div(
-            torch.matmul(anchor_feature,
-                         contrast_feature_graph.T), self.temperature
+            torch.matmul(anchor_feature, contrast_feature_graph.T), self.temperature
         )
         # for numerical stability
         logits_max, _ = torch.max(anchor_dot_contrast, dim=1, keepdim=True)
@@ -128,8 +141,8 @@ class SupConLoss(nn.Module):
         n_weight = -weight / dynamic_t
         n_weight = 1 + torch.exp(n_weight * gamma1)
         d_weight = (
-            (weight - dynamic_t.repeat([batch_size, 1]).T).T /
-            (torch.max(weight, dim=1)[0] - dynamic_t)
+            (weight - dynamic_t.repeat([batch_size, 1]).T).T
+            / (torch.max(weight, dim=1)[0] - dynamic_t)
         ).T + gamma2
         d_weight = torch.exp(d_weight)
 
@@ -145,7 +158,7 @@ class SupConLoss(nn.Module):
         # compute log_prob
         exp_logits = torch.exp(logits) * d_weight * logits_mask
         log_prob = torch.log(torch.exp(logits * n_weight * mask)) - torch.log(
-            exp_logits.sum(1, keepdim=True)
+            torch.div(exp_logits.sum(1, keepdim=True), (logits_mask).sum(1, keepdim=True))
         )
 
         # compute mean of log-likelihood over positive

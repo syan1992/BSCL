@@ -1,34 +1,46 @@
+from typing import Optional
+
 import torch
 import torch.nn as nn
+from torch import Tensor
 
 
 class SupConLoss(nn.Module):
     # Supervised Contrastive Learning: https://arxiv.org/pdf/2004.11362.pdf.
 
-    def __init__(self, temperature=0.07, contrast_mode="one", base_temperature=0.07):
+    def __init__(self, temperature: float = 0.07, base_temperature: float = 0.07):
+        """Supervised contrastive loss initialization.
+
+        Args:
+            temperature (float, optional): The hypaperameter in the supervised constrastive
+                loss. Defaults to 0.07.
+            base_temperature (float, optional): The hypaperameter in the supervised constrastive
+                loss. Defaults to 0.07.
+        """
         super(SupConLoss, self).__init__()
         self.temperature = temperature
-        self.contrast_mode = contrast_mode
         self.base_temperature = base_temperature
 
-    def forward(self, features, labels=None, mask=None):
-        """Compute loss for model.
+    def forward(
+        self, features: Tensor, labels: Optional[Tensor] = None, mask: Optional[Tensor] = None
+    ):
+        """Compute the supervised contrastive loss for model.
+
         Args:
-            features: hidden vector of shape [bsz, n_views, ...].
-            labels: ground truth of shape [bsz].
-            mask: contrastive mask of shape [bsz, bsz], mask_{i,j}=1 if sample j
-                has the same class as sample i. Can be asymmetric.
+            features (Tensor): hidden vector of shape [bsz, n_views, ...].
+            labels (Optional[Tensor], optional): ground truth of shape [bsz].
+            mask (Optional[Tensor], optional): contrastive mask of
+                shape [bsz, bsz], mask_{i,j}=1 if sample j has the same
+                class as sample i. Can be asymmetric.
         Returns:
             A loss scalar.
         """
-        device = torch.device(
-            "cuda") if features.is_cuda else torch.device("cpu")
+
+        device = torch.device("cuda") if features.is_cuda else torch.device("cpu")
 
         contrast_count = 1
         contrast_feature_smiles = features[:, 1, :]
         contrast_feature_graph = features[:, 0, :]
-
-        mask_init = mask
 
         ############################anchor graph###############################
         anchor_feature = contrast_feature_graph
@@ -42,8 +54,7 @@ class SupConLoss(nn.Module):
             raise ValueError("Num of labels does not match num of features")
         mask = torch.eq(labels, labels.T).float().to(device)
         anchor_dot_contrast = torch.div(
-            torch.matmul(anchor_feature,
-                         contrast_feature_smiles.T), self.temperature
+            torch.matmul(anchor_feature, contrast_feature_smiles.T), self.temperature
         )
         # for numerical stability
         logits_max, _ = torch.max(anchor_dot_contrast, dim=1, keepdim=True)
@@ -75,21 +86,7 @@ class SupConLoss(nn.Module):
         ############################anchor SMILES###############################
         anchor_feature = contrast_feature_smiles
         anchor_count = 1
-<<<<<<< HEAD
-=======
-        if self.contrast_mode == "one":
-            anchor_feature = contrast_feature_smiles
-            anchor_count = 1
-        elif self.contrast_mode == "all":
-            anchor_feature = contrast_feature
-            anchor_count = contrast_count
-        else:
-            raise ValueError("Unknown mode: {}".format(self.contrast_mode))
->>>>>>> improve the linting scores
 
-=======
-        
->>>>>>> improve the linting scores
         # anchor SMILES contrast graph
         batch_size = features.shape[0]
 
@@ -99,8 +96,7 @@ class SupConLoss(nn.Module):
         mask = torch.eq(labels, labels.T).float().to(device)
 
         anchor_dot_contrast = torch.div(
-            torch.matmul(anchor_feature,
-                         contrast_feature_graph.T), self.temperature
+            torch.matmul(anchor_feature, contrast_feature_graph.T), self.temperature
         )
         # for numerical stability
         logits_max, _ = torch.max(anchor_dot_contrast, dim=1, keepdim=True)

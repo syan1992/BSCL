@@ -3,11 +3,14 @@ import torch.nn.functional as F
 import torch_geometric as tg
 from torch_geometric.nn import MessagePassing
 from torch_scatter import scatter, scatter_softmax
+from torch_geometric.utils import degree
 
 from models.deepgcn_nn import MLP, BondEncoder
 
 
 class GenMessagePassing(MessagePassing):
+    """Aggregation methods from DeeperGCN."""
+
     def __init__(
         self, aggr="softmax", t=1.0, learn_t=False, p=1.0, learn_p=False, y=0.0, learn_y=False
     ):
@@ -76,7 +79,6 @@ class GenMessagePassing(MessagePassing):
             )
             torch.clamp_(out, min_value, max_value)
             out = torch.pow(out, 1 / self.p)
-            # torch.clamp(out, min_value, max_value)
 
             if self.aggr == "power_sum":
                 self.sigmoid_y = torch.sigmoid(self.y)
@@ -90,6 +92,8 @@ class GenMessagePassing(MessagePassing):
 
 
 class MsgNorm(torch.nn.Module):
+    """The message normalization layer proposed by DeeperGCN."""
+
     def __init__(self, learn_msg_scale=False):
         super(MsgNorm, self).__init__()
 
@@ -105,7 +109,7 @@ class MsgNorm(torch.nn.Module):
 class GENConv(GenMessagePassing):
     """
     GENeralized Graph Convolution (GENConv): https://arxiv.org/pdf/2006.07739.pdf
-    SoftMax  &  PowerMean Aggregation
+    SoftMax & PowerMean Aggregation.
     """
 
     def __init__(
@@ -190,9 +194,7 @@ class GENConv(GenMessagePassing):
 
 
 class GINEConv(tg.nn.GINEConv):
-    """
-    GINConv layer (with activation, batch normalization)
-    """
+    """GINConv layer (with activation, batch normalization)"""
 
     def __init__(self, in_channels, out_channels, act="relu", norm=None, bias=True, aggr="add"):
         super(GINEConv, self).__init__(MLP([in_channels, out_channels], act, norm, bias))

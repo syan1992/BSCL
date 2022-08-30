@@ -1,25 +1,27 @@
 # Molecular Property Prediction based on Bimodal Supervised Contrastive Learning
 
-## Recommended Requirements
-The scripts are tested under python 3.8 with the following packages, 
+## Install
+
+To install the required packages, follow these instructions (tested on a linux terminal):
+
+1- clone the repository
+
 ```
-matplotlib==3.4.3  
-networks==0.3.7   
-numpy==1.21.2  
-ogb==1.3.2  
-pandas==1.3.3  
-rdkit==2022.3.5  
-rdkit_pypi==2021.9.4  
-scikit_learn==1.1.2  
-scipy==1.7.1    
-torch==1.9.1  
-torch_geometric==2.0.1  
-torch_scatter==2.0.8  
-torchvision==0.10.1  
-tqdm==4.50.0  
-transformers==4.12.2  
+git clone https://github.com/syan1992/BSCL
 ```
-We run the code on GPU and the version of CUDA is 11.6
+
+2- cd into the cloned directory
+
+```
+cd BSCL
+```
+
+3- run the install script
+```
+pip install -r requirements.txt
+```
+
+We run the code on GPU.
 
 ## Datasets
 Please find the 'datasets' folder for the example of the data. The data should be split into train/validation/test subsets at first. 

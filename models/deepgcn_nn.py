@@ -1,4 +1,4 @@
-from torch import nn
+from torch import nn, Tensor
 from torch.nn import Sequential as Seq, Linear as Lin
 
 allowable_features = {
@@ -30,6 +30,7 @@ allowable_features = {
 
 
 def get_atom_feature_dims():
+    """Features of atom."""
     return list(
         map(
             len,
@@ -49,6 +50,7 @@ def get_atom_feature_dims():
 
 
 def get_bond_feature_dims():
+    """Features of bond."""
     return list(
         map(
             len,
@@ -64,8 +66,16 @@ def get_bond_feature_dims():
 ##############################
 #    Basic layers
 ##############################
-def act_layer(act_type, inplace=False, neg_slope=0.2, n_prelu=1):
-    # activation layer
+def act_layer(act_type: str, inplace: bool = False, neg_slope: float = 0.2, n_prelu: int = 1):
+    """Activation layer.
+
+    Args:
+        act_type (str): Type of activation
+        inplace (bool, optional): The parameter for ReLU and LeakyReLU. Defaults to False.
+        neg_slope (float, optional): The parameter for LeakyReLU . Defaults to 0.2.
+        n_prelu (int, optional): The parameter for PReLU . Defaults to 1.
+    """
+
     act = act_type.lower()
     if act == "relu":
         layer = nn.ReLU(inplace)
@@ -78,7 +88,13 @@ def act_layer(act_type, inplace=False, neg_slope=0.2, n_prelu=1):
     return layer
 
 
-def norm_layer(norm_type, nc):
+def norm_layer(norm_type: str, nc: int):
+    """Normalization Layer.
+
+    Args:
+        norm_type (str): Type of the normalization
+        nc (int): Number of features
+    """
     # normalization layer 1d
     norm = norm_type.lower()
     if norm == "batch":
@@ -92,21 +108,18 @@ def norm_layer(norm_type, nc):
     return layer
 
 
-class MultiSeq(Seq):
-    def __init__(self, *args):
-        super(MultiSeq, self).__init__(*args)
-
-    def forward(self, *inputs):
-        for module in self._modules.values():
-            if type(inputs) == tuple:
-                inputs = module(*inputs)
-            else:
-                inputs = module(inputs)
-        return inputs
-
-
 class MLP(Seq):
-    def __init__(self, channels, act="relu", norm=None, bias=True, drop=0.0, last_lin=False):
+    """Multi-layer perceptron."""
+
+    def __init__(
+        self,
+        channels: int,
+        act: str = "relu",
+        norm: str = None,
+        bias: bool = True,
+        drop: float = 0.0,
+        last_lin: bool = False,
+    ):
         m = []
 
         for i in range(1, len(channels)):
@@ -128,7 +141,14 @@ class MLP(Seq):
 
 
 class AtomEncoder(nn.Module):
-    def __init__(self, emb_dim):
+    """Encoder of atom."""
+
+    def __init__(self, emb_dim: int):
+        """
+
+        Args:
+            emb_dim (int): The dimension of the embedding.
+        """
         super(AtomEncoder, self).__init__()
 
         self.atom_embedding_list = nn.ModuleList()
@@ -139,7 +159,11 @@ class AtomEncoder(nn.Module):
             nn.init.xavier_uniform_(emb.weight.data)
             self.atom_embedding_list.append(emb)
 
-    def forward(self, x):
+    def forward(self, x: Tensor):
+        """
+        Args:
+            x (Tensor): Atom embeddings.
+        """
         x_embedding = 0
         for i in range(x.shape[1]):
             x_embedding += self.atom_embedding_list[i](x[:, i])
@@ -148,7 +172,13 @@ class AtomEncoder(nn.Module):
 
 
 class BondEncoder(nn.Module):
-    def __init__(self, emb_dim):
+    """Encoder of bond."""
+
+    def __init__(self, emb_dim: int):
+        """
+        Args:
+            emb_dim (int): Dimension of bond embedding.
+        """
         super(BondEncoder, self).__init__()
 
         self.bond_embedding_list = nn.ModuleList()
@@ -159,7 +189,11 @@ class BondEncoder(nn.Module):
             nn.init.xavier_uniform_(emb.weight.data)
             self.bond_embedding_list.append(emb)
 
-    def forward(self, edge_attr):
+    def forward(self, edge_attr: Tensor):
+        """
+        Args:
+            edge_attr (Tensor): Edge attribute.
+        """
         bond_embedding = 0
         for i in range(edge_attr.shape[1]):
             bond_embedding += self.bond_embedding_list[i](edge_attr[:, i])

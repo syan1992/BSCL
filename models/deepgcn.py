@@ -1,34 +1,50 @@
 import numpy as np
+from typing import Any
+
 import torch
+from torch import Tensor
 import torch.nn.functional as F
-from torch.nn import Linear
-from torch_geometric.nn import global_add_pool, global_mean_pool, global_max_pool
+from torch_geometric.nn import global_add_pool, global_mean_pool, global_max_pool, Set2Set
 
 from models.deepgcn_vertex import GENConv
 from models.deepgcn_nn import AtomEncoder, BondEncoder, MLP, norm_layer
 
 
 class DeeperGCN(torch.nn.Module):
+    """DeeperGCN network."""
+
     def __init__(
         self,
-        dim,
-        num_gc_layers,
-        dropout,
-        block,
-        conv_encode_edge,
-        add_virtual_node,
-        hidden_channels,
-        num_tasks,
-        aggr="add",
-        t=1.0,
-        learn_t=False,
-        p=1.0,
-        learn_p=False,
-        y=0.0,
-        learn_y=False,
-        mlp_layers=1,
-        norm="batch",
+        num_gc_layers: int,
+        dropout: float,
+        block: str,
+        conv_encode_edge: bool,
+        add_virtual_node: bool,
+        hidden_channels: int,
+        num_tasks: int,
+        aggr: str = "add",
+        graph_pooling: str = "mean",
+        t: float = 1.0,
+        learn_t: bool = False,
+        p: float = 1.0,
+        learn_p: bool = False,
+        y: float = 0.0,
+        learn_y: bool = False,
+        mlp_layers: int = 1,
+        norm: str = "batch",
     ):
+        """
+        Args:
+            num_gc_layers (int): Depth of the network.
+            dropout (float): Dropout rate.
+            block (str): Selection of the block, res, res+ or plain.
+            add_virtual_node (bool): Whether add virtual node.
+            hidden_channels (int): Number of hidden channels.
+            num_tasks (int): Number of tasks.
+            aggr (str, optional): Selection of aggregation methods. add, sum or max. Defaults to "add".
+            mlp_layers (int, optional): Number of MLP layers. Defaults to 1.
+            norm (str, optional): Selection of the normalization methods. batch or layer. Defaults to "batch".
+        """
         super(DeeperGCN, self).__init__()
 
         self.num_gc_layers = num_gc_layers
@@ -54,9 +70,7 @@ class DeeperGCN(torch.nn.Module):
         self.msg_norm = False
         learn_msg_scale = False
 
-        norm = "batch"
         mlp_layers = mlp_layers
-        graph_pooling = "sum"
 
         print(
             "The number of layers {}".format(self.num_gc_layers),
@@ -103,7 +117,6 @@ class DeeperGCN(torch.nn.Module):
             )
             self.gcns.append(conv)
             self.norms.append(norm_layer(norm, hidden_channels))
-            # self.norms.append(torch.nn.BatchNorm1d(hidden_channels, affine=True))
 
         self.atom_encoder = AtomEncoder(emb_dim=hidden_channels)
 
@@ -119,7 +132,9 @@ class DeeperGCN(torch.nn.Module):
         else:
             raise Exception("Unknown Pool Type")
 
-    def forward(self, x, edge_index, edge_attr, batch):
+        self.set2set = Set2Set(hidden_channels, processing_steps=3)
+
+    def forward(self, x, edge_index, edge_attr, batch, classification=True):
         h = self.atom_encoder(x)
 
         if self.add_virtual_node:
@@ -182,15 +197,18 @@ class DeeperGCN(torch.nn.Module):
         else:
             raise Exception("Unknown block Type")
 
-        h_graph = self.pool(h, batch)
-        xout = h_graph
+        if classification:
+            h_graph = self.set2set(h, batch)
+            xout = h_graph
+        else:
+            h_graph = self.pool(h, batch)
+            xout = h_graph
 
         return xout
 
     def get_embeddings(self, loader):
 
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        # device = 'cpu'
         ret = []
         y = []
         with torch.no_grad():
@@ -213,24 +231,33 @@ class DeeperGCN(torch.nn.Module):
 
 
 class SupConDeeperGCN(torch.nn.Module):
-    """backbone + projection head"""
+    def __init__(self, opt: Any):
+        """The molecular graph branch.
 
-    def __init__(self, num_tasks=1, mlp_layers=1, num_gc_layers=7):
+        Args:
+            opt (Any): Parsed arguments.
+        """
         super(SupConDeeperGCN, self).__init__()
         dim = 256
-        num_gc_layers = num_gc_layers
+        num_gc_layers = opt.num_gc_layers
         dropout = 0.2
         block = "res+"
         conv_encode_edge = False
         add_virtual_node = True
         hidden_channels = 256
-        self.num_tasks = num_tasks
+        self.num_tasks = opt.num_tasks
         aggr = "max"
+        graph_pooling = "sum"
         learn_t = False
         t = 0.1
-        mlp_layers = mlp_layers
+        mlp_layers = opt.mlp_layers
+        self.classification = opt.classification
+        if opt.classification:
+            norm = "batch"
+        else:
+            norm = "layer"
+
         self.encoder = DeeperGCN(
-            dim,
             num_gc_layers,
             dropout,
             block,
@@ -239,17 +266,30 @@ class SupConDeeperGCN(torch.nn.Module):
             hidden_channels,
             self.num_tasks,
             aggr,
+            graph_pooling,
             t=t,
             learn_t=learn_t,
             mlp_layers=mlp_layers,
-            norm="layer",
+            norm=norm,
         )
+        if opt.classification:
+            self.dense = torch.nn.Linear(dim * 2, 128)
+        else:
+            self.dense = torch.nn.Linear(dim, 128)
 
-        self.dense = torch.nn.Linear(256, 128)
         self.dropout = torch.nn.Dropout(0.5)
 
-    def forward(self, batch):
-        feat = self.encoder(batch.x, batch.edge_index, batch.edge_attr, batch.batch)
+    def forward(self, batch: Tensor):
+        """Generate the embedding of the molecular graph branch.
+        Args:
+            batch (Tensor) : A batch of data of the current epoch.
+
+        Returns:
+            The embedding of the molecular graph branch.
+        """
+        feat = self.encoder(
+            batch.x, batch.edge_index, batch.edge_attr, batch.batch, self.classification
+        )
         feat = self.dropout(feat)
         feat = self.dense(feat)
         return feat
