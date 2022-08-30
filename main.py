@@ -30,60 +30,45 @@ def parse_option():
 
     parser = argparse.ArgumentParser("argument for training")
 
-    parser.add_argument("--classification",
-                        action="store_true", help="classification task")
+    parser.add_argument("--classification", action="store_true", help="classification task")
 
     parser.add_argument("--wscl", type=float, default=1, help="weight of scl")
-    parser.add_argument("--wrecon", type=float,
-                        default=1, help="weight of recon")
+    parser.add_argument("--wrecon", type=float, default=1, help="weight of recon")
 
-    parser.add_argument("--global_feature",
-                        action="store_true", help="with global feature")
-    parser.add_argument("--batch_size", type=int,
-                        default=256, help="batch_size")
-    parser.add_argument("--num_workers", type=int,
-                        default=16, help="num of workers to use")
-    parser.add_argument("--epochs", type=int, default=1000,
-                        help="number of training epochs")
+    parser.add_argument("--global_feature", action="store_true", help="with global feature")
+    parser.add_argument("--batch_size", type=int, default=256, help="batch_size")
+    parser.add_argument("--num_workers", type=int, default=16, help="num of workers to use")
+    parser.add_argument("--epochs", type=int, default=1000, help="number of training epochs")
 
     # optimization
-    parser.add_argument("--learning_rate", type=float,
-                        default=0.05, help="learning rate")
+    parser.add_argument("--learning_rate", type=float, default=0.05, help="learning rate")
     parser.add_argument(
         "--lr_decay_epochs", type=str, default="1000", help="where to decay lr, can be a list"
     )
     parser.add_argument(
         "--lr_decay_rate", type=float, default=0.1, help="decay rate for learning rate"
     )
-    parser.add_argument("--weight_decay", type=float,
-                        default=1e-4, help="weight decay")
+    parser.add_argument("--weight_decay", type=float, default=1e-4, help="weight decay")
     parser.add_argument("--momentum", type=float, default=0.9, help="momentum")
 
     parser.add_argument("--model", type=str, default="DeeperGCN")
-    parser.add_argument("--dataset", type=str,
-                        default="freesolv", help="dataset")
-    parser.add_argument("--data_dir", type=str, default=None,
-                        help="path to custom dataset")
-    parser.add_argument("--num_tasks", type=int, default=1,
-                        help="parameter for task number")
+    parser.add_argument("--dataset", type=str, default="freesolv", help="dataset")
+    parser.add_argument("--data_dir", type=str, default=None, help="path to custom dataset")
+    parser.add_argument("--num_tasks", type=int, default=1, help="parameter for task number")
 
-    parser.add_argument("--temp", type=float, default=0.07,
-                        help="temperature for loss function")
+    parser.add_argument("--temp", type=float, default=0.07, help="temperature for loss function")
     parser.add_argument("--gamma1", type=float, default=2)
     parser.add_argument("--gamma2", type=float, default=2)
     parser.add_argument("--threshold", type=float, default=0.8)
     parser.add_argument("--mlp_layers", type=int, default=2)
     parser.add_argument("--num_gc_layers", type=int, default=3)
     # other setting
-    parser.add_argument("--cosine", action="store_true",
-                        help="using cosine annealing")
+    parser.add_argument("--cosine", action="store_true", help="using cosine annealing")
     parser.add_argument(
         "--syncBN", action="store_true", help="using synchronized batch normalization"
     )
-    parser.add_argument("--warm", action="store_true",
-                        help="warm-up for large batch training")
-    parser.add_argument("--trial", type=str, default="0",
-                        help="id for recording multiple runs")
+    parser.add_argument("--warm", action="store_true", help="warm-up for large batch training")
+    parser.add_argument("--trial", type=str, default="0", help="id for recording multiple runs")
 
     opt = parser.parse_args()
 
@@ -96,16 +81,18 @@ def parse_option():
         opt.lr_decay_epochs.append(int(it))
 
     if opt.classification:
-        opt.model_name = "SupCon_{}_lr_{}_bsz_{}_trial_{}_mlp_{}_wscl_{}_wrecon_{}_decay_{}_rate_{}".format(
-            opt.model,
-            opt.learning_rate,
-            opt.batch_size,
-            opt.trial,
-            opt.mlp_layers,
-            opt.wscl,
-            opt.wrecon, 
-            opt.lr_decay_epochs,
-            opt.lr_decay_rate,
+        opt.model_name = (
+            "SupCon_{}_lr_{}_bsz_{}_trial_{}_mlp_{}_wscl_{}_wrecon_{}_decay_{}_rate_{}".format(
+                opt.model,
+                opt.learning_rate,
+                opt.batch_size,
+                opt.trial,
+                opt.mlp_layers,
+                opt.wscl,
+                opt.wrecon,
+                opt.lr_decay_epochs,
+                opt.lr_decay_rate,
+            )
         )
     else:
         opt.model_name = "SupCon_{}_lr_{}_bsz_{}_trial_{}_gamma1_{}_gamma2_{}_mlp_{}_wscl_{}_wrecon_{}_decay_{}_rate_{}".format(
@@ -163,12 +150,9 @@ def set_loader(opt: Any, dataname: str) -> Set[Data]:
         Set[Data]: train/validation/test sets.
     """
 
-    train_dataset = PygOurDataset(
-        root=opt.data_dir, phase="train", dataname=dataname)
-    test_dataset = PygOurDataset(
-        root=opt.data_dir, phase="test", dataname=dataname)
-    val_dataset = PygOurDataset(
-        root=opt.data_dir, phase="valid", dataname=dataname)
+    train_dataset = PygOurDataset(root=opt.data_dir, phase="train", dataname=dataname)
+    test_dataset = PygOurDataset(root=opt.data_dir, phase="test", dataname=dataname)
+    val_dataset = PygOurDataset(root=opt.data_dir, phase="valid", dataname=dataname)
 
     return train_dataset, test_dataset, val_dataset
 
@@ -228,36 +212,28 @@ class BSCL(torch.nn.Sequential):
         self.recon_1 = torch.nn.Linear(dim_feat, dim_feat)
         self.recon_2 = torch.nn.Linear(dim_feat, dim_feat)
 
-        encoder_layer = torch.nn.TransformerEncoderLayer(
-            d_model=dim_feat, nhead=num_heads)
-        self.transformer_encoder = torch.nn.TransformerEncoder(
-            encoder_layer, num_layers=1)
+        encoder_layer = torch.nn.TransformerEncoderLayer(d_model=dim_feat, nhead=num_heads)
+        self.transformer_encoder = torch.nn.TransformerEncoder(encoder_layer, num_layers=1)
 
         self.fusion = torch.nn.Sequential()
         self.fusion.add_module(
-            "fusion_layer_1", torch.nn.Linear(
-                in_features=dim_feat * 4, out_features=dim_feat * 2)
+            "fusion_layer_1", torch.nn.Linear(in_features=dim_feat * 4, out_features=dim_feat * 2)
         )
         self.fusion.add_module("fusion_layer_1_dropout", torch.nn.Dropout(0.5))
         self.fusion.add_module("fusion_layer_1_activation", torch.nn.ReLU())
         self.fusion.add_module(
-            "fusion_layer_3", torch.nn.Linear(
-                in_features=dim_feat * 2, out_features=opt.num_tasks)
+            "fusion_layer_3", torch.nn.Linear(in_features=dim_feat * 2, out_features=opt.num_tasks)
         )
 
         self.fusion_global = torch.nn.Sequential()
         self.fusion_global.add_module(
             "fusion_layer_1",
-            torch.nn.Linear(in_features=dim_feat * 4 + 2048 +
-                            167, out_features=dim_feat * 2),
+            torch.nn.Linear(in_features=dim_feat * 4 + 2048 + 167, out_features=dim_feat * 2),
         )
+        self.fusion_global.add_module("fusion_layer_1_dropout", torch.nn.Dropout(0.5))
+        self.fusion_global.add_module("fusion_layer_1_activation", torch.nn.ReLU())
         self.fusion_global.add_module(
-            "fusion_layer_1_dropout", torch.nn.Dropout(0.5))
-        self.fusion_global.add_module(
-            "fusion_layer_1_activation", torch.nn.ReLU())
-        self.fusion_global.add_module(
-            "fusion_layer_3", torch.nn.Linear(
-                in_features=dim_feat * 2, out_features=opt.num_tasks)
+            "fusion_layer_3", torch.nn.Linear(in_features=dim_feat * 2, out_features=opt.num_tasks)
         )
 
     def forward(self, batch: Tensor, opt: Any, phase: str = "train"):
@@ -273,8 +249,7 @@ class BSCL(torch.nn.Sequential):
         """
         if opt.classification and opt.global_feature:
             global_feature = torch.cat(
-                (batch.mgf.view(batch.y.shape[0], -1),
-                 batch.maccs.view(batch.y.shape[0], -1)),
+                (batch.mgf.view(batch.y.shape[0], -1), batch.maccs.view(batch.y.shape[0], -1)),
                 dim=1,
             ).float()
         elif not opt.classification and opt.global_feature:
@@ -311,13 +286,12 @@ class BSCL(torch.nn.Sequential):
 
         if opt.global_feature:
             if opt.classification:
-                h_out = torch.cat(
-                    (h_out[0], h_out[1], h_out[2], h_out[3], global_feature), dim=1)
+                h_out = torch.cat((h_out[0], h_out[1], h_out[2], h_out[3], global_feature), dim=1)
                 output = self.fusion_global(h_out)
             else:
-                h_out = torch.cat((h_out[0], h_out[1], h_out[2], h_out[3]),dim=1)
-                h_out = (h_out-torch.mean(h_out))/torch.std(h_out)
-                output = self.fusion_global(torch.cat((h_out,global_feature),dim=1))
+                h_out = torch.cat((h_out[0], h_out[1], h_out[2], h_out[3]), dim=1)
+                h_out = (h_out - torch.mean(h_out)) / torch.std(h_out)
+                output = self.fusion_global(torch.cat((h_out, global_feature), dim=1))
         else:
             h_out = torch.cat((h_out[0], h_out[1], h_out[2], h_out[3]), dim=1)
             output = self.fusion(h_out)
@@ -359,8 +333,7 @@ def set_model(opt: Any):
             print(name)
 
     if opt.classification:
-        criterion_scl = SupConLoss(
-            temperature=opt.temp, base_temperature=opt.temp)
+        criterion_scl = SupConLoss(temperature=opt.temp, base_temperature=opt.temp)
     else:
         criterion_scl = SupConLoss(
             temperature=opt.temp,
@@ -421,8 +394,7 @@ def train(
     losses_scl = AverageMeter()
     losses = AverageMeter()
     train_dataset_shuffle = train_dataset.shuffle()
-    train_loader = DataLoader(
-        train_dataset_shuffle, batch_size=opt.batch_size, drop_last=True)
+    train_loader = DataLoader(train_dataset_shuffle, batch_size=opt.batch_size, drop_last=True)
     end = time.time()
 
     for _, batch in enumerate(tqdm(train_loader, desc="Iteration")):
@@ -449,21 +421,19 @@ def train(
             f1_raw,
             f2_raw,
         ) = model(batch, opt)
-        features_cross = torch.cat(
-            [f1_cross.unsqueeze(1), f2_cross.unsqueeze(1)], dim=1)
+        features_cross = torch.cat([f1_cross.unsqueeze(1), f2_cross.unsqueeze(1)], dim=1)
 
         loss_task_tmp = 0
         loss_scl_tmp = 0
         total_num = 0
 
-        loss_recon = (criterion_mse(f1_recon, f1_raw) +
-                      criterion_mse(f2_recon, f2_raw)) / 2.0
+        loss_recon = (criterion_mse(f1_recon, f1_raw) + criterion_mse(f2_recon, f2_raw)) / 2.0
         for i in range(labels.shape[1]):
             is_labeled = batch.y[:, i] == batch.y[:, i]
             loss_task = criterion_task(
-                output[is_labeled, i].squeeze(), labels[is_labeled, i].squeeze())
-            loss_scl = criterion_scl(
-                features_cross[is_labeled], labels[is_labeled, i])
+                output[is_labeled, i].squeeze(), labels[is_labeled, i].squeeze()
+            )
+            loss_scl = criterion_scl(features_cross[is_labeled], labels[is_labeled, i])
 
             loss_task_tmp = loss_task_tmp + loss_task
 
@@ -525,11 +495,9 @@ def validation(
     model.eval()
 
     if opt.classification:
-        evaluator = Evaluator(
-            name=opt.dataset, num_tasks=opt.num_tasks, eval_metric="rocauc")
+        evaluator = Evaluator(name=opt.dataset, num_tasks=opt.num_tasks, eval_metric="rocauc")
     else:
-        evaluator = Evaluator(
-            name=opt.dataset, num_tasks=opt.num_tasks, eval_metric="rmse")
+        evaluator = Evaluator(name=opt.dataset, num_tasks=opt.num_tasks, eval_metric="rmse")
     data_loader = DataLoader(
         dataset, batch_size=opt.batch_size, shuffle=False, num_workers=opt.num_workers
     )
@@ -545,8 +513,7 @@ def validation(
             feature = []
         for _, batch in enumerate(tqdm(data_loader, desc="Iteration")):
             batch = batch.to("cuda")
-            output, f1_sp, f2_sp, f1_co, f2_co, h_out = model(
-                batch, opt, "valid")
+            output, f1_sp, f2_sp, f1_co, f2_co, h_out = model(batch, opt, "valid")
 
             if not opt.classification:
                 output = output * std + mu
@@ -567,8 +534,7 @@ def validation(
         y_true = torch.cat(y_true, dim=0).squeeze().unsqueeze(1).numpy()
         if opt.num_tasks > 1:
             y_pred = np.concatenate(y_pred)
-            input_dict = {
-                "y_true": y_true.squeeze(), "y_pred": y_pred.squeeze()}
+            input_dict = {"y_true": y_true.squeeze(), "y_pred": y_pred.squeeze()}
         else:
             y_pred = np.expand_dims(np.concatenate(y_pred), 1)
             input_dict = {
@@ -580,7 +546,7 @@ def validation(
             eval_result = evaluator.eval(input_dict)["rocauc"]
         else:
             eval_result = evaluator.eval(input_dict)["rmse"]
-            
+
     if save_feature:
         feature_smiles = np.concatenate(feature_smiles)
         feature_graph = np.concatenate(feature_graph)
@@ -620,7 +586,7 @@ def main():
         # build optimizer
         optimizer = set_optimizer(opt, model)
 
-        model_name = '{}_{}'.format(opt.model_name, dataname)
+        model_name = "{}_{}".format(opt.model_name, dataname)
 
         # save folder
         opt.tb_folder = os.path.join(opt.tb_path, model_name)
@@ -690,8 +656,7 @@ def main():
 
         # save the last model
         print("best epoch : {}".format(best_epoch))
-        save_file = os.path.join(
-            opt.save_folder, "last_" + str(best_epoch) + ".pth")
+        save_file = os.path.join(opt.save_folder, "last_" + str(best_epoch) + ".pth")
         save_model(best_model, optimizer, opt, opt.epochs, save_file)
 
         test_acc = validation(test_dataset, best_model.cuda(), opt, mu, std)

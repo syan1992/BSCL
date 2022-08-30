@@ -75,7 +75,7 @@ class PygOurDataset(InMemoryDataset):
 
     @property
     def processed_file_names(self):
-        """Return the name of the processed file. """
+        """Return the name of the processed file."""
         return self.phase + "_" + self.dataname + ".pt"
 
     def process(self):
@@ -124,10 +124,10 @@ class PygOurDataset(InMemoryDataset):
         print("Saving...")
         torch.save((data, slices), self.processed_paths[0])
 
-    def get(self, idx:int):
-        """Get the idx-th data. 
+    def get(self, idx: int):
+        """Get the idx-th data.
         Args:
-            idx (int): The number of the data. 
+            idx (int): The number of the data.
         """
         data = Data()
         for key in self.data.keys:

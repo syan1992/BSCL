@@ -12,34 +12,35 @@ from models.deepgcn_nn import AtomEncoder, BondEncoder, MLP, norm_layer
 
 class DeeperGCN(torch.nn.Module):
     """DeeperGCN network."""
+
     def __init__(
         self,
-        num_gc_layers:int,
-        dropout:float,
-        block:str,
-        conv_encode_edge:bool,
-        add_virtual_node:bool,
-        hidden_channels:int,
-        num_tasks:int,
-        aggr:str="add",
-        graph_pooling:str='mean',
-        t:float=1.0,
-        learn_t:bool=False,
-        p:float=1.0,
-        learn_p:bool=False,
-        y:float=0.0,
-        learn_y:bool=False,
-        mlp_layers:int=1,
-        norm:str="batch",
+        num_gc_layers: int,
+        dropout: float,
+        block: str,
+        conv_encode_edge: bool,
+        add_virtual_node: bool,
+        hidden_channels: int,
+        num_tasks: int,
+        aggr: str = "add",
+        graph_pooling: str = "mean",
+        t: float = 1.0,
+        learn_t: bool = False,
+        p: float = 1.0,
+        learn_p: bool = False,
+        y: float = 0.0,
+        learn_y: bool = False,
+        mlp_layers: int = 1,
+        norm: str = "batch",
     ):
         """
         Args:
-            num_gc_layers (int): Depth of the network. 
-            dropout (float): Dropout rate. 
-            block (str): Selection of the block, res, res+ or plain.  
-            add_virtual_node (bool): Whether add virtual node. 
-            hidden_channels (int): Number of hidden channels. 
-            num_tasks (int): Number of tasks. 
+            num_gc_layers (int): Depth of the network.
+            dropout (float): Dropout rate.
+            block (str): Selection of the block, res, res+ or plain.
+            add_virtual_node (bool): Whether add virtual node.
+            hidden_channels (int): Number of hidden channels.
+            num_tasks (int): Number of tasks.
             aggr (str, optional): Selection of aggregation methods. add, sum or max. Defaults to "add".
             mlp_layers (int, optional): Number of MLP layers. Defaults to 1.
             norm (str, optional): Selection of the normalization methods. batch or layer. Defaults to "batch".
@@ -195,7 +196,7 @@ class DeeperGCN(torch.nn.Module):
                 h = F.dropout(h, p=self.dropout, training=self.training)
         else:
             raise Exception("Unknown block Type")
-        
+
         if classification:
             h_graph = self.set2set(h, batch)
             xout = h_graph
@@ -230,7 +231,7 @@ class DeeperGCN(torch.nn.Module):
 
 
 class SupConDeeperGCN(torch.nn.Module):
-    def __init__(self, opt:Any):
+    def __init__(self, opt: Any):
         """The molecular graph branch.
 
         Args:
@@ -246,15 +247,15 @@ class SupConDeeperGCN(torch.nn.Module):
         hidden_channels = 256
         self.num_tasks = opt.num_tasks
         aggr = "max"
-        graph_pooling = 'sum'
+        graph_pooling = "sum"
         learn_t = False
         t = 0.1
         mlp_layers = opt.mlp_layers
         self.classification = opt.classification
         if opt.classification:
-            norm = 'batch'
+            norm = "batch"
         else:
-            norm = 'layer'
+            norm = "layer"
 
         self.encoder = DeeperGCN(
             num_gc_layers,
@@ -269,13 +270,13 @@ class SupConDeeperGCN(torch.nn.Module):
             t=t,
             learn_t=learn_t,
             mlp_layers=mlp_layers,
-            norm=norm
+            norm=norm,
         )
         if opt.classification:
-            self.dense = torch.nn.Linear(dim*2, 128)
+            self.dense = torch.nn.Linear(dim * 2, 128)
         else:
             self.dense = torch.nn.Linear(dim, 128)
-            
+
         self.dropout = torch.nn.Dropout(0.5)
 
     def forward(self, batch: Tensor):
@@ -286,7 +287,9 @@ class SupConDeeperGCN(torch.nn.Module):
         Returns:
             The embedding of the molecular graph branch.
         """
-        feat = self.encoder(batch.x, batch.edge_index, batch.edge_attr, batch.batch, self.classification)
+        feat = self.encoder(
+            batch.x, batch.edge_index, batch.edge_attr, batch.batch, self.classification
+        )
         feat = self.dropout(feat)
         feat = self.dense(feat)
         return feat

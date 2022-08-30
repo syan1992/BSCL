@@ -92,7 +92,8 @@ class GenMessagePassing(MessagePassing):
 
 
 class MsgNorm(torch.nn.Module):
-    """The message normalization layer proposed by DeeperGCN. """
+    """The message normalization layer proposed by DeeperGCN."""
+
     def __init__(self, learn_msg_scale=False):
         super(MsgNorm, self).__init__()
 
