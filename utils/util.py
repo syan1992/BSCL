@@ -72,14 +72,19 @@ def warmup_learning_rate(
             param_group["lr"] = lr
 
 
-def set_optimizer(opt: Dict[str, Union[str, float, int, List]], model: nn.Sequential):
+def set_optimizer(lr: float, weight_decay: float, model: nn.Sequential):
     """Initialize the optimizer.
 
     Args:
-        opt (Dict[str,Union[str,float,int,List]]): Parsed arguments.
+        lr (float): Learning rate. 
+        weight_decay (float): Weight decay. 
+        model (nn.Sequential): Model. 
+
+    Returns:
+        _type_: _description_
     """
 
-    optimizer = optim.Adam(model.parameters(), lr=opt.learning_rate, weight_decay=opt.weight_decay)
+    optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 
     return optimizer
 

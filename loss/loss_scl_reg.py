@@ -5,9 +5,9 @@ import torch.nn as nn
 from torch import Tensor
 
 
-class SupConLoss(nn.Module):
+class SupConLossReg(nn.Module):
     # Supervised Contrastive Learning: https://arxiv.org/pdf/2004.11362.pdf.
-    # Weighted Supervised Contrastive Loss for the regression task
+    # The proposed Weighted Supervised Contrastive Loss for the regression task
     def __init__(
         self,
         temperature: float = 0.07,
@@ -30,7 +30,7 @@ class SupConLoss(nn.Module):
             threshold (float, optional): The hyperparameter of the weighted supervised
                 contrastive loss. Defaults to 0.8.
         """
-        super(SupConLoss, self).__init__()
+        super(SupConLossReg, self).__init__()
         self.temperature = temperature
         self.base_temperature = base_temperature
         self.gamma1 = gamma1
@@ -72,22 +72,29 @@ class SupConLoss(nn.Module):
         anchor_dot_contrast = torch.div(
             torch.matmul(anchor_feature, contrast_feature_smiles.T), self.temperature
         )
+
         # for numerical stability
         logits_max, _ = torch.max(anchor_dot_contrast, dim=1, keepdim=True)
         logits = anchor_dot_contrast - logits_max.detach()
 
+        #calculate the distance between two samples. 
         weight = torch.sqrt(
             (torch.pow(labels.repeat(1, batch_size) - labels.repeat(1, batch_size).T, 2))
         )
+        #select the median value of each anchor. 
         dynamic_t = torch.quantile(weight, 0.5, dim=1)
+        #add a limitation to the largest threshold. 
         dynamic_t = torch.where(dynamic_t > self.threshold, self.threshold, dynamic_t.double())
+        #samples with distance smaller than threshold will be considered as positive samples to the anchor. 
         mask = torch.le(weight, dynamic_t.repeat([batch_size, 1]).T).int()
 
         gamma1 = self.gamma1
         gamma2 = self.gamma2
 
+        #calculate the weight for positive pairs. 
         n_weight = -weight / dynamic_t
         n_weight = 1 + torch.exp(n_weight * gamma1)
+        #calculate the weight for negative pairs. 
         d_weight = (
             (weight - dynamic_t.repeat([batch_size, 1]).T).T
             / (torch.max(weight, dim=1)[0] - dynamic_t)
