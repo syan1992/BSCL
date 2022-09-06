@@ -35,5 +35,5 @@ then
 		            --trial 1 --dataset clintox --num_tasks 2 --temp 0.07 --mlp_layers 2 --classification\
                     --wscl 1 --wrecon 0.1 --data_dir "datasets" --num_gc_layers 7 --global_feature
 else
-	echo "Input a dataset"
+	echo "The input dataset name should be one of thses: 'freesolv', 'delaney', 'lipophilicity', 'bace', 'tox21', 'sider', and 'clintox'."
 fi
