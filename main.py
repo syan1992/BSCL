@@ -21,7 +21,6 @@ from models.smiles_bert import SMILESBert
 from utils.evaluate import Evaluator
 from utils.load_dataset import PygOurDataset
 from utils.util import AverageMeter, adjust_learning_rate, set_optimizer, save_model, calmean
-
 from loss.loss_scl_cls import SupConLossCls
 from loss.loss_scl_reg import SupConLossReg
 
@@ -138,6 +137,7 @@ def parse_option():
 
 opt = parse_option()
 
+
 def set_loader(opt: Any, dataname: str) -> Set[Data]:
     """Load dataset from opt.datas_dir.
 
@@ -233,7 +233,7 @@ class BSCL(torch.nn.Sequential):
         """The network of the BSCL.
 
         Args:
-            input_molecule (Tensor): Input. 
+            input_molecule (Tensor): Input.
             opt (Any): Parsed arguments.
             phase (str, optional): Train phase or validation phase. Defaults to "train".
 
@@ -242,7 +242,10 @@ class BSCL(torch.nn.Sequential):
         """
         if opt.classification and opt.global_feature:
             global_feature = torch.cat(
-                (input_molecule.mgf.view(input_molecule.y.shape[0], -1), input_molecule.maccs.view(input_molecule.y.shape[0], -1)),
+                (
+                    input_molecule.mgf.view(input_molecule.y.shape[0], -1),
+                    input_molecule.maccs.view(input_molecule.y.shape[0], -1),
+                ),
                 dim=1,
             ).float()
         elif not opt.classification and opt.global_feature:

@@ -8,11 +8,11 @@ from rdkit.Chem import AllChem
 from rdkit.Chem.rdchem import Mol
 import torch
 from ogb.utils.mol import smiles2graph
-from ogb.utils.url import decide_download, download_url, extract_zip
 from torch_geometric.data import InMemoryDataset, Data
 from transformers import RobertaTokenizerFast
 
 FINGERPRINT_SIZE = 2048
+
 
 def getmorganfingerprint(mol: Mol):
     """Get the ECCP fingerprint.

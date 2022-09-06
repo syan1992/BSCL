@@ -76,9 +76,9 @@ def set_optimizer(lr: float, weight_decay: float, model: nn.Sequential):
     """Initialize the optimizer.
 
     Args:
-        lr (float): Learning rate. 
-        weight_decay (float): Weight decay. 
-        model (nn.Sequential): Model. 
+        lr (float): Learning rate.
+        weight_decay (float): Weight decay.
+        model (nn.Sequential): Model.
 
     Returns:
         _type_: _description_
