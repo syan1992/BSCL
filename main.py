@@ -22,8 +22,8 @@ from utils.evaluate import Evaluator
 from utils.load_dataset import PygOurDataset
 from utils.util import AverageMeter, adjust_learning_rate, set_optimizer, save_model, calmean
 
-from loss_scl_cls import SupConLossCls
-from loss_scl_reg import SupConLossReg
+from loss.loss_scl_cls import SupConLossCls
+from loss.loss_scl_reg import SupConLossReg
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
@@ -229,11 +229,11 @@ class BSCL(torch.nn.Sequential):
             "fusion_layer_3", torch.nn.Linear(in_features=dim_feat * 2, out_features=opt.num_tasks)
         )
 
-    def forward(self, input: Tensor, opt: Any, phase: str = "train"):
+    def forward(self, input_molecule: Tensor, opt: Any, phase: str = "train"):
         """The network of the BSCL.
 
         Args:
-            input (Tensor): Input. 
+            input_molecule (Tensor): Input. 
             opt (Any): Parsed arguments.
             phase (str, optional): Train phase or validation phase. Defaults to "train".
 
@@ -242,25 +242,25 @@ class BSCL(torch.nn.Sequential):
         """
         if opt.classification and opt.global_feature:
             global_feature = torch.cat(
-                (input.mgf.view(input.y.shape[0], -1), input.maccs.view(input.y.shape[0], -1)),
+                (input_molecule.mgf.view(input_molecule.y.shape[0], -1), input_molecule.maccs.view(input_molecule.y.shape[0], -1)),
                 dim=1,
             ).float()
         elif not opt.classification and opt.global_feature:
             global_feature = F.normalize(
                 torch.cat(
                     (
-                        input.mgf.view(input.y.shape[0], -1),
-                        input.maccs.view(input.y.shape[0], -1),
+                        input_molecule.mgf.view(input_molecule.y.shape[0], -1),
+                        input_molecule.maccs.view(input_molecule.y.shape[0], -1),
                     ),
                     dim=1,
                 ).float(),
                 dim=1,
             )
 
-        f1_raw = self.model_1(input)
-        f2_raw = self.model_2(
-            input.input_ids.view(input.y.shape[0], -1).int(),
-            input.attention_mask.view(input.y.shape[0], -1).int(),
+        f1_raw = self.model_graph(input_molecule)
+        f2_raw = self.model_smiles(
+            input_molecule.input_ids.view(input_molecule.y.shape[0], -1).int(),
+            input_molecule.attention_mask.view(input_molecule.y.shape[0], -1).int(),
         )
         f1_sp = self.enc_graph_specific(f1_raw)
         f2_sp = self.enc_smiles_specific(f2_raw)
