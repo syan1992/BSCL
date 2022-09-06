@@ -21,6 +21,8 @@ from models.smiles_bert import SMILESBert
 from utils.evaluate import Evaluator
 from utils.load_dataset import PygOurDataset
 from utils.util import AverageMeter, adjust_learning_rate, set_optimizer, save_model, calmean
+from loss.loss_scl_cls import SupConLossCls
+from loss.loss_scl_reg import SupConLossReg
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
@@ -62,6 +64,7 @@ def parse_option():
     parser.add_argument("--threshold", type=float, default=0.8)
     parser.add_argument("--mlp_layers", type=int, default=2)
     parser.add_argument("--num_gc_layers", type=int, default=3)
+
     # other setting
     parser.add_argument("--cosine", action="store_true", help="using cosine annealing")
     parser.add_argument(
@@ -133,10 +136,6 @@ def parse_option():
 
 
 opt = parse_option()
-if opt.classification:
-    from loss.loss_scl_cls import SupConLoss
-else:
-    from loss.loss_scl_reg import SupConLoss
 
 
 def set_loader(opt: Any, dataname: str) -> Set[Data]:
@@ -158,7 +157,7 @@ def set_loader(opt: Any, dataname: str) -> Set[Data]:
 
 
 class BSCL(torch.nn.Sequential):
-    """The BSCL network."""
+    """The Bimodal Supervised Contrastive Learning network."""
 
     def __init__(self, model_1: Module, model_2: Module, opt: Any):
         """Initialization of the BSCL network.
@@ -169,30 +168,24 @@ class BSCL(torch.nn.Sequential):
             opt (Any): Parsed arguments
         """
         super(BSCL, self).__init__()
-        self.model_1 = model_1
-        self.model_2 = model_2
+        self.model_graph = model_1
+        self.model_smiles = model_2
 
         dim_feat = 128
         num_heads = 2
 
-        self.enc1_1 = torch.nn.Sequential(
+        self.enc_graph_specific = torch.nn.Sequential(
             torch.nn.Linear(dim_feat, dim_feat),
             torch.nn.ReLU(inplace=True),
             torch.nn.Linear(dim_feat, dim_feat),
         )
-        self.enc1_2 = torch.nn.Sequential(
-            torch.nn.Linear(dim_feat, dim_feat),
-            torch.nn.ReLU(inplace=True),
-            torch.nn.Linear(dim_feat, dim_feat),
-        )
-
-        self.enc2_1 = torch.nn.Sequential(
+        self.enc_smiles_specific = torch.nn.Sequential(
             torch.nn.Linear(dim_feat, dim_feat),
             torch.nn.ReLU(inplace=True),
             torch.nn.Linear(dim_feat, dim_feat),
         )
 
-        self.enc2_2 = torch.nn.Sequential(
+        self.enc_joint = torch.nn.Sequential(
             torch.nn.Linear(dim_feat, dim_feat),
             torch.nn.ReLU(inplace=True),
             torch.nn.Linear(dim_feat, dim_feat),
@@ -236,11 +229,11 @@ class BSCL(torch.nn.Sequential):
             "fusion_layer_3", torch.nn.Linear(in_features=dim_feat * 2, out_features=opt.num_tasks)
         )
 
-    def forward(self, batch: Tensor, opt: Any, phase: str = "train"):
+    def forward(self, input_molecule: Tensor, opt: Any, phase: str = "train"):
         """The network of the BSCL.
 
         Args:
-            batch1 (Tensor): Input batch
+            input_molecule (Tensor): Input.
             opt (Any): Parsed arguments.
             phase (str, optional): Train phase or validation phase. Defaults to "train".
 
@@ -249,39 +242,42 @@ class BSCL(torch.nn.Sequential):
         """
         if opt.classification and opt.global_feature:
             global_feature = torch.cat(
-                (batch.mgf.view(batch.y.shape[0], -1), batch.maccs.view(batch.y.shape[0], -1)),
+                (
+                    input_molecule.mgf.view(input_molecule.y.shape[0], -1),
+                    input_molecule.maccs.view(input_molecule.y.shape[0], -1),
+                ),
                 dim=1,
             ).float()
         elif not opt.classification and opt.global_feature:
             global_feature = F.normalize(
                 torch.cat(
                     (
-                        batch.mgf.view(batch.y.shape[0], -1),
-                        batch.maccs.view(batch.y.shape[0], -1),
+                        input_molecule.mgf.view(input_molecule.y.shape[0], -1),
+                        input_molecule.maccs.view(input_molecule.y.shape[0], -1),
                     ),
                     dim=1,
                 ).float(),
                 dim=1,
             )
 
-        f1_raw = self.model_1(batch)
-        f2_raw = self.model_2(
-            batch.input_ids.view(batch.y.shape[0], -1).int(),
-            batch.attention_mask.view(batch.y.shape[0], -1).int(),
+        f1_raw = self.model_graph(input_molecule)
+        f2_raw = self.model_smiles(
+            input_molecule.input_ids.view(input_molecule.y.shape[0], -1).int(),
+            input_molecule.attention_mask.view(input_molecule.y.shape[0], -1).int(),
         )
-        f1_sp = self.enc1_1(f1_raw)
-        f2_sp = self.enc2_1(f2_raw)
+        f1_sp = self.enc_graph_specific(f1_raw)
+        f2_sp = self.enc_smiles_specific(f2_raw)
 
-        f1_co = self.enc1_2(f1_raw)
-        f2_co = self.enc1_2(f2_raw)
+        f1_joint = self.enc_joint(f1_raw)
+        f2_joint = self.enc_joint(f2_raw)
 
-        f1_cross = F.normalize(self.head_1(f1_co), dim=1)
-        f2_cross = F.normalize(self.head_2(f2_co), dim=1)
+        f1_joint_head = F.normalize(self.head_1(f1_joint), dim=1)
+        f2_joint_head = F.normalize(self.head_2(f2_joint), dim=1)
 
-        f1_recon = self.recon_1(f1_sp + f1_co)
-        f2_recon = self.recon_2(f2_sp + f2_co)
+        f1_recon = self.recon_1(f1_sp + f1_joint)
+        f2_recon = self.recon_2(f2_sp + f2_joint)
 
-        h_out = torch.stack((f1_sp, f2_sp, f1_co, f2_co), dim=0)
+        h_out = torch.stack((f1_sp, f2_sp, f1_joint, f2_joint), dim=0)
         h_out = self.transformer_encoder(h_out)
 
         if opt.global_feature:
@@ -298,20 +294,20 @@ class BSCL(torch.nn.Sequential):
 
         if phase == "train":
             return (
-                f1_cross,
-                f2_cross,
+                f1_joint_head,
+                f2_joint_head,
                 f1_recon,
                 f2_recon,
                 output,
                 f1_sp,
                 f2_sp,
-                f1_co,
-                f2_co,
+                f1_joint,
+                f2_joint,
                 f1_raw,
                 f2_raw,
             )
         else:
-            return output, f1_sp, f2_sp, f1_cross, f2_cross, h_out
+            return output, f1_sp, f2_sp, f1_joint_head, f2_joint_head, h_out
 
 
 def set_model(opt: Any):
@@ -333,9 +329,9 @@ def set_model(opt: Any):
             print(name)
 
     if opt.classification:
-        criterion_scl = SupConLoss(temperature=opt.temp, base_temperature=opt.temp)
+        criterion_scl = SupConLossCls(temperature=opt.temp, base_temperature=opt.temp)
     else:
-        criterion_scl = SupConLoss(
+        criterion_scl = SupConLossReg(
             temperature=opt.temp,
             base_temperature=opt.temp,
             gamma1=opt.gamma1,
@@ -584,7 +580,7 @@ def main():
         model, criterion_scl, criterion_mse, criterion_task = set_model(opt)
 
         # build optimizer
-        optimizer = set_optimizer(opt, model)
+        optimizer = set_optimizer(opt.learning_rate, opt.weight_decay, model)
 
         model_name = "{}_{}".format(opt.model_name, dataname)
 

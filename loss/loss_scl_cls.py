@@ -5,7 +5,7 @@ import torch.nn as nn
 from torch import Tensor
 
 
-class SupConLoss(nn.Module):
+class SupConLossCls(nn.Module):
     # Supervised Contrastive Learning: https://arxiv.org/pdf/2004.11362.pdf.
 
     def __init__(self, temperature: float = 0.07, base_temperature: float = 0.07):
@@ -17,7 +17,7 @@ class SupConLoss(nn.Module):
             base_temperature (float, optional): The hypaperameter in the supervised constrastive
                 loss. Defaults to 0.07.
         """
-        super(SupConLoss, self).__init__()
+        super(SupConLossCls, self).__init__()
         self.temperature = temperature
         self.base_temperature = base_temperature
 

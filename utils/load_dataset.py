@@ -8,9 +8,10 @@ from rdkit.Chem import AllChem
 from rdkit.Chem.rdchem import Mol
 import torch
 from ogb.utils.mol import smiles2graph
-from ogb.utils.url import decide_download, download_url, extract_zip
 from torch_geometric.data import InMemoryDataset, Data
 from transformers import RobertaTokenizerFast
+
+FINGERPRINT_SIZE = 2048
 
 
 def getmorganfingerprint(mol: Mol):
@@ -19,7 +20,7 @@ def getmorganfingerprint(mol: Mol):
     Args:
         mol (Mol): The molecule.
     """
-    return list(AllChem.GetMorganFingerprintAsBitVect(mol, 2))
+    return list(AllChem.GetMorganFingerprintAsBitVect(mol, 2, nBits=FINGERPRINT_SIZE))
 
 
 def getmaccsfingerprint(mol: Mol):
