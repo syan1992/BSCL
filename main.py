@@ -1,6 +1,7 @@
 import os
 import time
 import math
+import warnings
 import argparse
 from copy import deepcopy
 from typing import Set, Callable, Any
@@ -24,6 +25,8 @@ from utils.util import AverageMeter, adjust_learning_rate, set_optimizer, save_m
 from loss.loss_scl_cls import SupConLossCls
 from loss.loss_scl_reg import SupConLossReg
 
+
+warnings.filterwarnings("ignore")
 os.environ["CUDA_VISIBLE_DEVICES"] = "0"
 
 
