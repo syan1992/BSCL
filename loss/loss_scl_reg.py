@@ -125,6 +125,9 @@ class SupConLossReg(nn.Module):
         loss_graph_smiles = loss.view(anchor_count, -1).mean()
 
         ############################anchor SMILES###############################
+        anchor_feature = contrast_feature_smiles
+        anchor_count = 1
+
         # anchor SMILES contrast graph
         batch_size = features.shape[0]
 
