@@ -5,6 +5,7 @@ import warnings
 import argparse
 from copy import deepcopy
 from typing import Set, Callable, Any
+import random
 
 import numpy as np
 from tqdm import tqdm
@@ -327,7 +328,7 @@ def set_model(opt: Any):
     model = BSCL(model_1, model_2, opt)
 
     for name, param in model.named_parameters():
-        if "model_2.model.embeddings" in name or "model_2.model.encoder" in name:
+        if "model_smiles.model.embeddings" in name or "model_smiles.model.encoder" in name:
             param.requires_grad = False
             print(name)
 
@@ -566,9 +567,15 @@ def validation(
     else:
         return eval_result
 
+def setup_seed(seed):
+     torch.manual_seed(seed)
+     torch.cuda.manual_seed_all(seed)
+     np.random.seed(seed)
+     random.seed(seed)
+     torch.backends.cudnn.deterministic = True
 
 def main():
-
+    setup_seed(30)
     for dataname in [opt.dataset + "_1", opt.dataset + "_2", opt.dataset + "_3"]:
 
         # build data loader
