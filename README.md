@@ -47,3 +47,15 @@ Some specific hyperparameters in this work,
 ## Acknowledgement
 Supervised contrastive learning : https://github.com/HobbitLong/SupContrast  
 Deepgcn : https://github.com/lightaime/deep_gcns_torch
+
+## Reference
+```
+@inproceedings{sun2022molecular,
+  title={Molecular Property Prediction based on Bimodal Supervised Contrastive Learning},
+  author={Sun, Yan and Islam, Mohaiminul and Zahedi, Ehsan and Kuenemann, M{\'e}laine and Chouaib, Hassan and Hu, Pingzhao},
+  booktitle={2022 IEEE International Conference on Bioinformatics and Biomedicine (BIBM)},
+  pages={394--397},
+  year={2022},
+  organization={IEEE}
+}
+```
