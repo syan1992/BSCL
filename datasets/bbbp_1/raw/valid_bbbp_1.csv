@@ -184,7 +184,6 @@ C1CN(CCC1)Cc1cccc(c1)OCCCNc1nc2c(o1)cccc2,1
 C1=CC(=CC4=C1N2C(=NC(/C2=O)=C\N3CCN(C)CC3)CN=C4C5=C(C=CC=C5)Cl)[N+](=O)[O-],1
 C1=C([N](CC[S](CC)(=O)=O)C(=N1)C)[N+](=O)[O-],1
 c1cc2c(c(c(c3ccccc3)nc2cc1)OCCNC([C@@H]1CCCN1)=O)C(=O)N[C@@H](CC)c1ccccc1,0
-O=N([O-])C1=C(CN=C1NCCSCc2ncccc2)Cc3ccccc3,1
 [C@@]125C3=C4C[C@H]([C@@]1(CC[C@@H]([C@@H]2OC3=C(C=C4)O)O)O)N(C)CC5,1
 [C@@]23(Cl)C(C1C([C@](O)(CC1)C(=O)COC(=O)C)(CC2Cl)C)CCC4=CC(=O)C=CC34C,1
 CN(C)CCCN1c2ccccc2CCc3ccc(Cl)cc13,1

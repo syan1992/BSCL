@@ -29,7 +29,6 @@ NC(N)=NCCN1CCCCCCC1,0
 [NH]C(CC(C)C([N@@](C(C)(C)C)C(N)(C)N)(C)C)c1c(c(c[nH+][o+]1)C)[O-],1
 c1ccc2c(c(C(N[C@@H](CC)c3ccccc3)=O)c(OCCNC(Cc3c(cccc3)C(=O)O)=O)c(c3ccccc3)n2)c1,0
 C1=CC=CC2=C1N(C3=C(S2)C=CC(=C3)[S](N(C)C)(=O)=O)CCCN4CCN(CC4)C,1
-Cc1nc(sc1)\[NH]=C(\N)N,1
 CN1CCN(CC1)c2c(F)cc3C(=O)C(=CN4CCSc2c34)C(O)=O,0
 Cc1onc(N[S](=O)(=O)c2ccc(N)cc2)c1,1
 OC(Cn1cncn1)(Cn2cncn2)c3ccc(F)cc3F,1
